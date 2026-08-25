@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+/*
+  Bimaya design tokens.
+  Palette roles (keep the weighting premium — white ~60%, blue ~25%, orange ~10%, green ~5%):
+    Blue    — primary / trust (headers, nav, primary buttons)
+    Orange  — accent / CTA only (the one action that matters)
+    Green   — success / active status only
+    White   — dominant background
+*/
+@theme {
+  /* Blue — primary / trust */
+  --color-brand-50: #eef4fb;
+  --color-brand-100: #d3e3f4;
+  --color-brand-200: #a7c7e9;
+  --color-brand-300: #6fa3d7;
+  --color-brand-400: #3e7ec0;
+  --color-brand-500: #1e5fa8;
+  --color-brand-600: #1a5493;
+  --color-brand-700: #154277;
+  --color-brand-800: #10365e;
+  --color-brand-900: #0c2949;
+  --color-brand-950: #081b31;
+
+  /* Orange — accent / CTA */
+  --color-accent-50: #fef4ea;
+  --color-accent-100: #fde4c8;
+  --color-accent-200: #fac791;
+  --color-accent-300: #f7ac60;
+  --color-accent-400: #f4a052;
+  --color-accent-500: #f2994a;
+  --color-accent-600: #e07e2b;
+  --color-accent-700: #b96421;
+  --color-accent-800: #934f1d;
+  --color-accent-900: #6f3c18;
+
+  /* Green — success / active status */
+  --color-success-50: #e9f8ef;
+  --color-success-100: #c9eed8;
+  --color-success-200: #96deb4;
+  --color-success-300: #5fcb8d;
+  --color-success-400: #38b972;
+  --color-success-500: #27ae60;
+  --color-success-600: #219653;
+  --color-success-700: #1b7b45;
+  --color-success-800: #166138;
+  --color-success-900: #124e2e;
+
+  /* Semantic surfaces & text */
+  --color-background: #ffffff;
+  --color-foreground: #0f1f33;
+  --color-ink: #0f1f33;
+  --color-muted: #5b6b7f;
+  --color-surface: #f5f8fc;
+  --color-line: #e4eaf1;
+
+  /* Typography */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: var(--font-sora), var(--font-inter), ui-sans-serif, system-ui,
+    sans-serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: var(--color-brand-500);
+    color: #ffffff;
+  }
+}
