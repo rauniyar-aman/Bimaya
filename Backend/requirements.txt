@@ -1,0 +1,13 @@
+# Bimaya backend — Python dependencies
+Django>=6.1,<7
+djangorestframework>=3.18
+djangorestframework-simplejwt>=5.5
+psycopg[binary]>=3.3
+django-cors-headers>=4.9
+django-environ>=0.14
+django-filter>=26
+drf-spectacular>=0.30
+Pillow>=12
+reportlab>=5
+requests>=2.34
+argon2-cffi>=25
