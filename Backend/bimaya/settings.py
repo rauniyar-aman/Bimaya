@@ -21,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DJANGO_DEBUG=(bool, True),
     DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
-    CORS_ALLOWED_ORIGINS=(list, ["http://localhost:3000"]),
+    CORS_ALLOWED_ORIGINS=(list, ["http://localhost:3000", "http://127.0.0.1:3000"]),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -140,6 +140,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 12,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "apps.core.exceptions.api_exception_handler",
     "DEFAULT_THROTTLE_CLASSES": (
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -170,9 +171,25 @@ SPECTACULAR_SETTINGS = {
 }
 
 # ---------------------------------------------------------------------------
+# One-time passwords (account verification & password reset)
+# ---------------------------------------------------------------------------
+OTP_LENGTH = env.int("OTP_LENGTH", default=6)
+OTP_EXPIRY_MINUTES = env.int("OTP_EXPIRY_MINUTES", default=10)
+OTP_MAX_ATTEMPTS = env.int("OTP_MAX_ATTEMPTS", default=5)
+
+# In development there is no SMS gateway, so the code is returned in the API
+# response to keep the signup flow testable. This MUST stay off in production.
+OTP_RETURN_IN_RESPONSE = env.bool("OTP_RETURN_IN_RESPONSE", default=DEBUG)
+
+# ---------------------------------------------------------------------------
 # CORS (locked to the frontend origin)
 # ---------------------------------------------------------------------------
-CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:3000"])
+# Both dev hostnames are allowed by default because "localhost" and "127.0.0.1"
+# are separate origins to a browser, and the Next.js dev server answers on both.
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=["http://localhost:3000", "http://127.0.0.1:3000"],
+)
 CORS_ALLOW_CREDENTIALS = True
 
 # ---------------------------------------------------------------------------

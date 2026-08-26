@@ -1,3 +1,6 @@
+import secrets
+
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from django.utils import timezone
@@ -65,13 +68,35 @@ class OTP(TimeStampedModel):
     purpose = models.CharField(max_length=20, choices=Purpose.choices)
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
+    attempts = models.PositiveSmallIntegerField(
+        default=0, help_text="Failed verification attempts against this code."
+    )
+
+    class Meta(TimeStampedModel.Meta):
+        indexes = [models.Index(fields=["user", "purpose", "is_used"])]
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_locked(self):
+        """True once too many wrong codes have been tried."""
+        return self.attempts >= settings.OTP_MAX_ATTEMPTS
 
     def is_valid(self, code):
-        return (
-            not self.is_used
-            and self.code == code
-            and timezone.now() < self.expires_at
-        )
+        if self.is_used or self.is_expired or self.is_locked:
+            return False
+        # Constant-time comparison so a wrong code cannot be found by timing.
+        return secrets.compare_digest(str(self.code), str(code))
+
+    def mark_used(self):
+        self.is_used = True
+        self.save(update_fields=["is_used", "updated_at"])
+
+    def register_failed_attempt(self):
+        self.attempts += 1
+        self.save(update_fields=["attempts", "updated_at"])
 
     def __str__(self):
         return f"{self.user.email} · {self.get_purpose_display()}"

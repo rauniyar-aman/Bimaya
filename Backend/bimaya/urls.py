@@ -9,8 +9,8 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 # API v1 — feature apps plug their routers/urls in here as they are built.
 api_v1 = [
     path("", include("apps.core.urls")),
+    path("auth/", include("apps.accounts.urls")),
     # Phase 1 wiring (added as each app lands):
-    # path("auth/", include("apps.accounts.urls")),
     # path("", include("apps.policies.urls")),
     # path("", include("apps.purchases.urls")),
     # path("", include("apps.payments.urls")),
