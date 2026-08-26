@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Sora } from "next/font/google";
+import { AuthProvider } from "@/components/auth/auth-provider";
 import "./globals.css";
 
 const inter = Inter({
@@ -56,7 +57,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} ${sora.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

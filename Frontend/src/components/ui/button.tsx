@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes } from "react";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/cn";
 
 export type ButtonVariant =
@@ -46,6 +47,8 @@ export function buttonVariants({
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  /** Show a spinner and block further clicks while an action is in flight. */
+  loading?: boolean;
 }
 
 export function Button({
@@ -53,13 +56,21 @@ export function Button({
   size = "md",
   className,
   type = "button",
+  loading = false,
+  disabled,
+  children,
   ...props
 }: ButtonProps) {
   return (
     <button
       type={type}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={buttonVariants({ variant, size, className })}
       {...props}
-    />
+    >
+      {loading && <Spinner />}
+      {children}
+    </button>
   );
 }
