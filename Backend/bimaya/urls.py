@@ -10,8 +10,9 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 api_v1 = [
     path("", include("apps.core.urls")),
     path("auth/", include("apps.accounts.urls")),
+    path("", include("apps.providers.urls")),
+    path("", include("apps.policies.urls")),
     # Phase 1 wiring (added as each app lands):
-    # path("", include("apps.policies.urls")),
     # path("", include("apps.purchases.urls")),
     # path("", include("apps.payments.urls")),
     path("schema/", SpectacularAPIView.as_view(), name="schema"),

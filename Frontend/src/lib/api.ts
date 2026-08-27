@@ -125,6 +125,177 @@ export interface RegisterResponse extends MessageResponse {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Marketplace shapes                                                         */
+/* -------------------------------------------------------------------------- */
+
+export type PremiumFrequency = "MONTHLY" | "QUARTERLY" | "YEARLY" | "ONE_TIME";
+export type PolicyStatus = "DRAFT" | "PENDING" | "APPROVED" | "INACTIVE";
+export type KycStatus = "PENDING" | "VERIFIED" | "REJECTED";
+
+/** DRF page — `/policies/` and `/provider/policies/` are paginated. */
+export interface Paginated<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
+export interface CategoryLight {
+  id: number;
+  name: string;
+  slug: string;
+  icon: string;
+}
+
+export interface InsuranceCategory extends CategoryLight {
+  description: string;
+  order: number;
+  policy_count: number;
+}
+
+export interface ProviderLight {
+  id: number;
+  company_name: string;
+  slug: string;
+  logo: string | null;
+}
+
+export interface ProviderPublic extends ProviderLight {
+  description: string;
+  website: string;
+}
+
+/** Compact policy shape for cards, search results and category pages. */
+export interface PolicySummary {
+  id: number;
+  name: string;
+  slug: string;
+  summary: string;
+  premium: string;
+  premium_frequency: PremiumFrequency;
+  coverage_amount: string;
+  term_months: number;
+  is_featured: boolean;
+  category: CategoryLight;
+  provider: ProviderLight;
+}
+
+/** Full public policy for the detail page. */
+export interface Policy extends PolicySummary {
+  description: string;
+  min_age: number | null;
+  max_age: number | null;
+  features: string[];
+  add_ons: string[];
+  terms: string;
+  provider: ProviderPublic;
+  created_at: string;
+}
+
+/** Normalised fields for the side-by-side comparison table. */
+export interface PolicyCompare {
+  id: number;
+  name: string;
+  slug: string;
+  summary: string;
+  premium: string;
+  premium_frequency: PremiumFrequency;
+  coverage_amount: string;
+  term_months: number;
+  min_age: number | null;
+  max_age: number | null;
+  features: string[];
+  add_ons: string[];
+  category: CategoryLight;
+  provider: ProviderLight;
+}
+
+export interface PolicyListParams {
+  category?: string;
+  search?: string;
+  ordering?: string;
+  premium_min?: string | number;
+  premium_max?: string | number;
+  coverage_min?: string | number;
+  premium_frequency?: PremiumFrequency;
+  featured?: boolean;
+  page?: string | number;
+}
+
+/* Provider-facing shapes (own profile + own policies). */
+
+export interface ProviderProfile {
+  id: number;
+  company_name: string;
+  slug: string;
+  registration_number: string;
+  description: string;
+  logo: string | null;
+  website: string;
+  support_email: string;
+  support_phone: string;
+  kyc_status: KycStatus;
+  is_approved: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProviderProfileInput {
+  company_name: string;
+  registration_number?: string;
+  description?: string;
+  website?: string;
+  support_email?: string;
+  support_phone?: string;
+}
+
+/** A provider's own policy — `category` is the write PK, `category_detail` the read shape. */
+export interface ProviderPolicy {
+  id: number;
+  name: string;
+  slug: string;
+  summary: string;
+  description: string;
+  category: number;
+  category_detail: CategoryLight;
+  premium: string;
+  premium_frequency: PremiumFrequency;
+  coverage_amount: string;
+  term_months: number;
+  min_age: number | null;
+  max_age: number | null;
+  features: string[];
+  add_ons: string[];
+  terms: string;
+  status: PolicyStatus;
+  is_featured: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProviderPolicyInput {
+  name: string;
+  summary?: string;
+  description?: string;
+  category: number;
+  premium: string;
+  premium_frequency: PremiumFrequency;
+  coverage_amount: string;
+  term_months: number;
+  min_age?: number | null;
+  max_age?: number | null;
+  features?: string[];
+  add_ons?: string[];
+  terms?: string;
+}
+
+/**
+ * Signature of the `authFetch` provided by `useAuth()`. Provider endpoints take
+ * it as their first argument so calls stay typed without re-threading the token.
+ */
+export type AuthFetch = <T>(path: string, options?: ApiFetchOptions) => Promise<T>;
+
+/* -------------------------------------------------------------------------- */
 /* Error helpers                                                              */
 /* -------------------------------------------------------------------------- */
 
@@ -161,6 +332,17 @@ export function errorMessage(error: unknown, fallback: string): string {
 /* -------------------------------------------------------------------------- */
 /* Endpoints                                                                  */
 /* -------------------------------------------------------------------------- */
+
+/** Serialise a params object to a query string, dropping empty values. */
+function toQuery(params: Record<string, unknown>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : "";
+}
 
 export const api = {
   health: () => apiFetch<HealthResponse>("/health/"),
@@ -220,6 +402,78 @@ export const api = {
         method: "POST",
         token,
         json: payload,
+      }),
+  },
+
+  /** Public catalog — no token, safe to call from the server or the browser. */
+  categories: {
+    list: () =>
+      apiFetch<InsuranceCategory[]>("/categories/", { cache: "no-store" }),
+
+    get: (slug: string) =>
+      apiFetch<InsuranceCategory>(`/categories/${slug}/`, { cache: "no-store" }),
+  },
+
+  policies: {
+    list: (params: PolicyListParams = {}) =>
+      apiFetch<Paginated<PolicySummary>>(
+        `/policies/${toQuery(params as Record<string, unknown>)}`,
+        {
+          cache: "no-store",
+        },
+      ),
+
+    get: (slug: string) =>
+      apiFetch<Policy>(`/policies/${slug}/`, { cache: "no-store" }),
+
+    compare: (ids: number[]) =>
+      apiFetch<PolicyCompare[]>(`/policies/compare/?ids=${ids.join(",")}`, {
+        cache: "no-store",
+      }),
+  },
+
+  /**
+   * Provider-only endpoints. Each takes the `authFetch` from `useAuth()` so the
+   * access token is injected and refreshed on 401 automatically.
+   */
+  provider: {
+    getProfile: (authFetch: AuthFetch) =>
+      authFetch<ProviderProfile>("/provider/profile/"),
+
+    saveProfile: (
+      authFetch: AuthFetch,
+      payload: ProviderProfileInput,
+      method: "PUT" | "PATCH" = "PUT",
+    ) => authFetch<ProviderProfile>("/provider/profile/", { method, json: payload }),
+
+    listPolicies: (authFetch: AuthFetch) =>
+      authFetch<Paginated<ProviderPolicy>>("/provider/policies/"),
+
+    getPolicy: (authFetch: AuthFetch, id: number) =>
+      authFetch<ProviderPolicy>(`/provider/policies/${id}/`),
+
+    createPolicy: (authFetch: AuthFetch, payload: ProviderPolicyInput) =>
+      authFetch<ProviderPolicy>("/provider/policies/", {
+        method: "POST",
+        json: payload,
+      }),
+
+    updatePolicy: (
+      authFetch: AuthFetch,
+      id: number,
+      payload: Partial<ProviderPolicyInput>,
+    ) =>
+      authFetch<ProviderPolicy>(`/provider/policies/${id}/`, {
+        method: "PATCH",
+        json: payload,
+      }),
+
+    deletePolicy: (authFetch: AuthFetch, id: number) =>
+      authFetch<void>(`/provider/policies/${id}/`, { method: "DELETE" }),
+
+    submitPolicy: (authFetch: AuthFetch, id: number) =>
+      authFetch<ProviderPolicy>(`/provider/policies/${id}/submit/`, {
+        method: "POST",
       }),
   },
 };

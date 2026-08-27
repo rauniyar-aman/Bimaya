@@ -7,10 +7,18 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { cn } from "@/lib/cn";
 import { ROLE_LABELS, displayName, initials } from "@/lib/user";
 
-const MENU_LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/profile", label: "Profile settings" },
-];
+import type { AuthUser } from "@/lib/api";
+
+function menuLinksFor(user: AuthUser) {
+  const links = [
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard/profile", label: "Profile settings" },
+  ];
+  if (user.role === "PROVIDER") {
+    links.splice(1, 0, { href: "/provider", label: "Provider area" });
+  }
+  return links;
+}
 
 /** Avatar button with the signed-in user's account menu. */
 export function UserMenu() {
@@ -40,6 +48,8 @@ export function UserMenu() {
   }, [open]);
 
   if (!user) return null;
+
+  const menuLinks = menuLinksFor(user);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -99,7 +109,7 @@ export function UserMenu() {
           </div>
 
           <div className="p-1.5">
-            {MENU_LINKS.map((link) => (
+            {menuLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
