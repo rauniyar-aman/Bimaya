@@ -12,9 +12,8 @@ api_v1 = [
     path("auth/", include("apps.accounts.urls")),
     path("", include("apps.providers.urls")),
     path("", include("apps.policies.urls")),
-    # Phase 1 wiring (added as each app lands):
-    # path("", include("apps.purchases.urls")),
-    # path("", include("apps.payments.urls")),
+    path("", include("apps.purchases.urls")),
+    path("", include("apps.payments.urls")),
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path("docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 ]

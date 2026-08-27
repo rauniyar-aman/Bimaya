@@ -9,7 +9,8 @@ import { Navbar } from "@/components/layout/navbar";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { LockIcon, ShieldCheckIcon, WalletIcon } from "@/components/icons";
+import { ShieldCheckIcon } from "@/components/icons";
+import { PurchaseForm } from "@/components/checkout/purchase-form";
 import { ApiError, api, type Policy } from "@/lib/api";
 import { formatFrequency, formatNpr, formatTerm } from "@/lib/format";
 
@@ -155,57 +156,20 @@ function CheckoutInner({ slug }: { slug: string }) {
             </Card>
           </div>
 
-          {/* Payment (coming soon) */}
+          {/* Nominee details & payment */}
           <div className="lg:col-span-1">
             <Card className="lg:sticky lg:top-24">
               <CardContent className="space-y-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-muted">Amount due</p>
-                    <p className="font-display text-2xl font-bold text-brand-600">
-                      {formatNpr(policy.premium)}
-                    </p>
-                  </div>
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-500">
-                    <WalletIcon className="h-5 w-5" />
-                  </span>
-                </div>
-
-                <div className="rounded-xl border border-dashed border-line bg-surface/60 p-4 text-center">
-                  <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white text-brand-500 shadow-sm">
-                    <LockIcon className="h-5 w-5" />
-                  </span>
-                  <p className="mt-3 text-sm font-semibold text-ink">
-                    Secure checkout is coming soon
-                  </p>
-                  <p className="mt-1 text-xs text-muted">
-                    Online payment with eSewa and Khalti is on its way. You
-                    won&apos;t be charged today.
+                <div>
+                  <h2 className="font-display text-lg font-semibold text-ink">
+                    Payment details
+                  </h2>
+                  <p className="mt-1 text-sm text-muted">
+                    Tell us who to protect, then choose how to pay.
                   </p>
                 </div>
 
-                <div className="space-y-2.5">
-                  <button
-                    type="button"
-                    disabled
-                    className="flex w-full cursor-not-allowed items-center justify-between rounded-xl border border-line bg-white px-4 py-3 text-sm font-medium text-ink/70 opacity-70"
-                  >
-                    Pay with eSewa
-                    <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] text-muted">
-                      Soon
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    className="flex w-full cursor-not-allowed items-center justify-between rounded-xl border border-line bg-white px-4 py-3 text-sm font-medium text-ink/70 opacity-70"
-                  >
-                    Pay with Khalti
-                    <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] text-muted">
-                      Soon
-                    </span>
-                  </button>
-                </div>
+                <PurchaseForm policy={policy} />
 
                 <Link
                   href={`/policies/${policy.slug}`}

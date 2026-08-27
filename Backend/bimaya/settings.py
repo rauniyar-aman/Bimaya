@@ -224,6 +224,16 @@ MAILERS = {
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Bimaya <no-reply@bimaya.local>")
 
 # ---------------------------------------------------------------------------
+# Payment gateways (sandbox test credentials by default — see
+# apps/payments/gateways/ for the sandbox endpoints themselves)
+# ---------------------------------------------------------------------------
+ESEWA_MERCHANT_CODE = env("ESEWA_MERCHANT_CODE", default="EPAYTEST")
+ESEWA_SECRET_KEY = env("ESEWA_SECRET_KEY", default="8gBm/:&EnhH.1/q")
+KHALTI_SECRET_KEY = env(
+    "KHALTI_SECRET_KEY", default="test_secret_key_68ba473c2ce54774bee9d4791cf34c1c"
+)
+
+# ---------------------------------------------------------------------------
 # Production hardening (only when DEBUG is off)
 # ---------------------------------------------------------------------------
 if not DEBUG:

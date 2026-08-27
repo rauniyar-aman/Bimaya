@@ -289,6 +289,53 @@ export interface ProviderPolicyInput {
   terms?: string;
 }
 
+/* Customer-facing shapes (purchases + payments). */
+
+export type PurchaseStatus = "PENDING_PAYMENT" | "ACTIVE" | "EXPIRED" | "CANCELLED";
+export type PaymentGateway = "ESEWA" | "KHALTI";
+
+/** A customer's purchase of a policy, with the policy nested for one-request rendering. */
+export interface PolicyPurchase {
+  id: number;
+  policy: PolicySummary;
+  nominee_name: string;
+  nominee_relationship: string;
+  nominee_contact: string;
+  status: PurchaseStatus;
+  policy_number: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  renewal_reminder_sent: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PolicyPurchaseInput {
+  policy: number;
+  nominee_name: string;
+  nominee_relationship: string;
+  nominee_contact: string;
+}
+
+export interface PaymentInitiateInput {
+  policy_purchase_id: number;
+  gateway: PaymentGateway;
+}
+
+/** What a gateway needs to take over: eSewa returns a form to auto-submit, Khalti a URL to follow. */
+export interface PaymentInitiateResult {
+  payment_id: number;
+  gateway: PaymentGateway;
+  payment_url: string;
+  fields?: Record<string, string>;
+  pidx?: string;
+}
+
+export interface PaymentCallbackResult {
+  detail: string;
+  status: string;
+}
+
 /**
  * Signature of the `authFetch` provided by `useAuth()`. Provider endpoints take
  * it as their first argument so calls stay typed without re-threading the token.
@@ -475,5 +522,35 @@ export const api = {
       authFetch<ProviderPolicy>(`/provider/policies/${id}/submit/`, {
         method: "POST",
       }),
+  },
+
+  /** Customer-only endpoints for buying a policy and paying for it. */
+  purchases: {
+    list: (authFetch: AuthFetch) =>
+      authFetch<Paginated<PolicyPurchase>>("/purchases/"),
+
+    get: (authFetch: AuthFetch, id: number) =>
+      authFetch<PolicyPurchase>(`/purchases/${id}/`),
+
+    create: (authFetch: AuthFetch, payload: PolicyPurchaseInput) =>
+      authFetch<PolicyPurchase>("/purchases/", { method: "POST", json: payload }),
+
+    cancel: (authFetch: AuthFetch, id: number) =>
+      authFetch<PolicyPurchase>(`/purchases/${id}/cancel/`, { method: "POST" }),
+  },
+
+  payments: {
+    initiate: (authFetch: AuthFetch, payload: PaymentInitiateInput) =>
+      authFetch<PaymentInitiateResult>("/payments/initiate/", {
+        method: "POST",
+        json: payload,
+      }),
+
+    /** Public — the browser forwards whatever the gateway put in the redirect. */
+    confirm: (gateway: PaymentGateway, params: URLSearchParams) =>
+      apiFetch<PaymentCallbackResult>(
+        `/payments/${gateway.toLowerCase()}/callback/?${params.toString()}`,
+        { noCredentials: true },
+      ),
   },
 };
