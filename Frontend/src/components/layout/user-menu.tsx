@@ -12,6 +12,7 @@ import type { AuthUser } from "@/lib/api";
 function menuLinksFor(user: AuthUser) {
   const links = [
     { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard/policies", label: "My policies" },
     { href: "/dashboard/profile", label: "Profile settings" },
   ];
   if (user.role === "PROVIDER") {
