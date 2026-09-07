@@ -18,7 +18,17 @@ export const PURCHASE_STATUS_META: Record<PurchaseStatus, StatusMeta> = {
   PENDING_PAYMENT: {
     variant: "pending",
     label: "Payment pending",
-    hint: "Finish paying to activate this policy.",
+    hint: "Finish paying to move this policy forward.",
+  },
+  PAID: {
+    variant: "info",
+    label: "Paid — under review",
+    hint: "We have your payment. Our team is verifying your KYC and payment.",
+  },
+  FORWARDED: {
+    variant: "info",
+    label: "With provider",
+    hint: "Sent to the insurer to issue your policy. You'll get a policy number shortly.",
   },
   EXPIRED: {
     variant: "expired",

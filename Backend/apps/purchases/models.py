@@ -1,6 +1,4 @@
 import calendar
-import secrets
-import string
 
 from django.conf import settings
 from django.db import models
@@ -8,8 +6,6 @@ from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
 from apps.policies.models import Policy
-
-POLICY_NUMBER_ALPHABET = string.ascii_uppercase + string.digits
 
 
 def _add_months(start, months):
@@ -32,12 +28,16 @@ class PolicyPurchaseQuerySet(models.QuerySet):
 class PolicyPurchase(TimeStampedModel):
     """A customer's purchase of a policy.
 
-    Created in ``PENDING_PAYMENT`` and only becomes ``ACTIVE`` once a linked
-    ``Payment`` succeeds — see ``apps.payments``, which calls :meth:`activate`.
+    Lifecycle: ``PENDING_PAYMENT`` → ``PAID`` (payment settled) → ``FORWARDED``
+    (admin verified KYC + payment and handed it to the provider) → ``ACTIVE``
+    (provider issued the policy and recorded its number). ``EXPIRED`` and
+    ``CANCELLED`` are the terminal off-ramps.
     """
 
     class Status(models.TextChoices):
         PENDING_PAYMENT = "PENDING_PAYMENT", "Pending payment"
+        PAID = "PAID", "Paid — awaiting review"
+        FORWARDED = "FORWARDED", "With provider for issuance"
         ACTIVE = "ACTIVE", "Active"
         EXPIRED = "EXPIRED", "Expired"
         CANCELLED = "CANCELLED", "Cancelled"
@@ -49,6 +49,18 @@ class PolicyPurchase(TimeStampedModel):
     )
     policy = models.ForeignKey(
         Policy, on_delete=models.PROTECT, related_name="purchases"
+    )
+    kyc = models.ForeignKey(
+        "documents.CustomerKyc",
+        on_delete=models.PROTECT,
+        related_name="purchases",
+        null=True,
+        blank=True,
+        help_text="The KYC covering the insured party for this purchase.",
+    )
+    insured_is_self = models.BooleanField(
+        default=True,
+        help_text="Whether the customer is buying for themselves or someone else.",
     )
     nominee_name = models.CharField(max_length=150)
     nominee_relationship = models.CharField(max_length=80)
@@ -70,28 +82,39 @@ class PolicyPurchase(TimeStampedModel):
     def __str__(self):
         return f"{self.customer.email} · {self.policy.name}"
 
-    def activate(self):
-        """Mark payment as settled: generate the policy number and term dates."""
-        if not self.policy_number:
-            self.policy_number = self._generate_policy_number()
+    def mark_paid(self):
+        """A payment succeeded — the purchase now awaits admin verification.
+
+        This deliberately does **not** issue the policy: KYC and payment are
+        verified by an administrator, who forwards the purchase to the provider,
+        who then issues it (see :meth:`issue`).
+        """
+        if self.status == self.Status.PENDING_PAYMENT:
+            self.status = self.Status.PAID
+            self.save(update_fields=["status", "updated_at"])
+
+    def forward_to_provider(self):
+        """Admin has verified KYC + payment; hand the purchase to the provider."""
+        if self.status != self.Status.PAID:
+            raise ValueError("Only a paid purchase can be forwarded for issuance.")
+        self.status = self.Status.FORWARDED
+        self.save(update_fields=["status", "updated_at"])
+
+    def issue(self, policy_number):
+        """The provider issues the policy: record their number and activate it."""
+        if self.status != self.Status.FORWARDED:
+            raise ValueError("Only a forwarded purchase can be issued.")
         today = timezone.localdate()
+        self.policy_number = policy_number
         self.status = self.Status.ACTIVE
         self.start_date = today
         self.end_date = _add_months(today, self.policy.term_months)
         self.save(
             update_fields=[
-                "status",
                 "policy_number",
+                "status",
                 "start_date",
                 "end_date",
                 "updated_at",
             ]
         )
-
-    def _generate_policy_number(self):
-        year = timezone.localdate().year
-        while True:
-            suffix = "".join(secrets.choice(POLICY_NUMBER_ALPHABET) for _ in range(6))
-            candidate = f"BIM-{year}-{suffix}"
-            if not PolicyPurchase.objects.filter(policy_number=candidate).exists():
-                return candidate

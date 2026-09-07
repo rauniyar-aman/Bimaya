@@ -13,6 +13,7 @@ function menuLinksFor(user: AuthUser) {
   const links = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/dashboard/policies", label: "My policies" },
+    { href: "/dashboard/kyc", label: "KYC verification" },
     { href: "/dashboard/profile", label: "Profile settings" },
   ];
   if (user.role === "PROVIDER") {

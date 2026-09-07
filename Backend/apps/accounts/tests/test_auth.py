@@ -37,7 +37,6 @@ def register_payload(**overrides):
         "email": "sita@example.com",
         "full_name": "Sita Sharma",
         "phone": "9800000000",
-        "role": User.Role.CUSTOMER,
         "password": PASSWORD,
         "confirm_password": PASSWORD,
     }
@@ -95,14 +94,20 @@ class RegistrationTests(APITestCase):
         self.assertFalse(User.objects.exists())
 
     def test_admin_role_cannot_be_self_assigned(self):
+        # ``role`` is not a registration input; a client attempting to set it is
+        # ignored and the account is created as a customer.
         response = self.client.post(
             self.url, register_payload(role=User.Role.ADMIN), format="json"
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("role", response.data["errors"])
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            User.objects.get(email="sita@example.com").role, User.Role.CUSTOMER
+        )
 
-    def test_provider_role_is_allowed(self):
+    def test_provider_role_cannot_be_self_assigned(self):
+        # Providers are onboarded by an admin (see apps.leads), never via public
+        # registration — a posted ``role`` is ignored.
         response = self.client.post(
             self.url,
             register_payload(email="provider@example.com", role=User.Role.PROVIDER),
@@ -111,7 +116,7 @@ class RegistrationTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(
-            User.objects.get(email="provider@example.com").role, User.Role.PROVIDER
+            User.objects.get(email="provider@example.com").role, User.Role.CUSTOMER
         )
 
 

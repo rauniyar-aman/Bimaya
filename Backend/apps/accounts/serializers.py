@@ -49,22 +49,16 @@ class RegisterSerializer(serializers.ModelSerializer):
     confirm_password = serializers.CharField(
         write_only=True, style={"input_type": "password"}
     )
-    # Only self-service roles — administrators are created internally.
-    role = serializers.ChoiceField(
-        choices=[
-            (User.Role.CUSTOMER, User.Role.CUSTOMER.label),
-            (User.Role.PROVIDER, User.Role.PROVIDER.label),
-        ],
-        default=User.Role.CUSTOMER,
-    )
 
     class Meta:
         model = User
+        # Public registration only ever creates a customer. Providers are
+        # onboarded by an administrator (see apps.leads), and administrators are
+        # created internally — so ``role`` is deliberately not client-supplied.
         fields = (
             "email",
             "full_name",
             "phone",
-            "role",
             "password",
             "confirm_password",
         )

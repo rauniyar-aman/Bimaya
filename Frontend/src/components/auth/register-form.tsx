@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AuthFootnote, AuthHeading } from "@/components/auth/auth-heading";
@@ -12,29 +13,8 @@ import {
   errorMessage,
   fieldErrors,
   type RegisterPayload,
-  type UserRole,
 } from "@/lib/api";
-import { cn } from "@/lib/cn";
 import { rememberDevCode } from "@/lib/dev-otp";
-
-type SelfServiceRole = Exclude<UserRole, "ADMIN">;
-
-const ROLES: {
-  value: SelfServiceRole;
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: "CUSTOMER",
-    label: "I want insurance",
-    description: "Compare and buy policies for yourself or your family.",
-  },
-  {
-    value: "PROVIDER",
-    label: "I sell insurance",
-    description: "List your company's policies and reach new customers.",
-  },
-];
 
 export function RegisterForm() {
   const router = useRouter();
@@ -43,7 +23,6 @@ export function RegisterForm() {
     full_name: "",
     email: "",
     phone: "",
-    role: "CUSTOMER",
     password: "",
     confirm_password: "",
   });
@@ -102,53 +81,6 @@ export function RegisterForm() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium text-ink">
-            How will you use Bimaya?
-          </legend>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {ROLES.map((role) => {
-              const selected = form.role === role.value;
-              return (
-                <label
-                  key={role.value}
-                  className={cn(
-                    "cursor-pointer rounded-xl border p-3.5 transition-colors focus-within:ring-2 focus-within:ring-brand-100",
-                    selected
-                      ? "border-brand-400 bg-brand-50"
-                      : "border-line bg-white hover:border-brand-200",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="role"
-                    value={role.value}
-                    checked={selected}
-                    onChange={() => update("role", role.value)}
-                    className="sr-only"
-                  />
-                  <span
-                    className={cn(
-                      "block text-sm font-medium",
-                      selected ? "text-brand-700" : "text-ink",
-                    )}
-                  >
-                    {role.label}
-                  </span>
-                  <span className="mt-1 block text-xs leading-relaxed text-muted">
-                    {role.description}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-          {errors.role && (
-            <p role="alert" className="text-sm text-red-600">
-              {errors.role}
-            </p>
-          )}
-        </fieldset>
-
         <Field
           label="Full name"
           htmlFor="full_name"
@@ -260,6 +192,16 @@ export function RegisterForm() {
         href="/login"
         action="Sign in"
       />
+
+      <p className="mt-4 text-center text-xs text-muted">
+        Are you an insurance company?{" "}
+        <Link
+          href="/for-providers"
+          className="font-medium text-brand-600 underline-offset-4 hover:underline"
+        >
+          Partner with Bimaya
+        </Link>
+      </p>
     </>
   );
 }

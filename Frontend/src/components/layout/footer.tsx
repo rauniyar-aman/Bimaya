@@ -17,6 +17,7 @@ const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
     links: [
       { href: "/about", label: "About Bimaya" },
       { href: "/#how-it-works", label: "How it works" },
+      { href: "/for-providers", label: "For insurance providers" },
       { href: "/contact", label: "Contact" },
     ],
   },

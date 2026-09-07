@@ -30,6 +30,11 @@ export interface ApiFetchOptions extends RequestInit {
   token?: string | null;
   /** Body to send as JSON — serialised and content-typed automatically. */
   json?: unknown;
+  /**
+   * Body to send as multipart form data (for file uploads). The browser sets
+   * the `Content-Type` (with the boundary), so we never set it ourselves.
+   */
+  form?: FormData;
   /** Override the API base — pass `""` to call a same-origin Next route. */
   baseUrl?: string;
 }
@@ -44,17 +49,23 @@ export async function apiFetch<T>(
     body,
     token,
     json,
+    form,
     baseUrl = API_BASE_URL,
     ...rest
   } = options;
   const url = path.startsWith("http") ? path : `${baseUrl}${path}`;
-  const payload = json !== undefined ? JSON.stringify(json) : body;
+  // JSON is serialised and content-typed; FormData is sent as-is so the browser
+  // can set the multipart boundary; a raw body is passed straight through.
+  const payload = json !== undefined ? JSON.stringify(json) : form ?? body;
+  const isMultipart = form !== undefined;
 
   const res = await fetch(url, {
     credentials: noCredentials ? "omit" : "include",
     headers: {
       Accept: "application/json",
-      ...(payload ? { "Content-Type": "application/json" } : {}),
+      ...(payload !== undefined && !isMultipart
+        ? { "Content-Type": "application/json" }
+        : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
@@ -109,9 +120,17 @@ export interface RegisterPayload {
   email: string;
   full_name: string;
   phone: string;
-  role: Exclude<UserRole, "ADMIN">;
   password: string;
   confirm_password: string;
+}
+
+/** Public enquiry from the "For insurance providers" onboarding form. */
+export interface ProviderLeadInput {
+  company_name: string;
+  contact_name: string;
+  email: string;
+  phone?: string;
+  message?: string;
 }
 
 export interface MessageResponse {
@@ -291,13 +310,69 @@ export interface ProviderPolicyInput {
 
 /* Customer-facing shapes (purchases + payments). */
 
-export type PurchaseStatus = "PENDING_PAYMENT" | "ACTIVE" | "EXPIRED" | "CANCELLED";
+export type PurchaseStatus =
+  | "PENDING_PAYMENT"
+  | "PAID"
+  | "FORWARDED"
+  | "ACTIVE"
+  | "EXPIRED"
+  | "CANCELLED";
 export type PaymentGateway = "ESEWA" | "KHALTI";
+
+export type MaritalStatus = "SINGLE" | "MARRIED" | "OTHER";
+export type DocumentType = "PASSPORT" | "CITIZENSHIP" | "NID";
+
+/** A customer's KYC record (own reusable, or a beneficiary's). */
+export interface CustomerKyc {
+  id: number;
+  is_self: boolean;
+  full_name: string;
+  email: string;
+  phone: string;
+  date_of_birth: string | null;
+  marital_status: MaritalStatus | "";
+  family_details: string;
+  temporary_address: string;
+  permanent_address: string;
+  document_type: DocumentType;
+  document_number: string;
+  document_front: string | null;
+  document_back: string | null;
+  status: KycStatus;
+  review_note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Fields the customer fills in; images are appended to FormData separately. */
+export interface CustomerKycInput {
+  full_name: string;
+  email?: string;
+  phone?: string;
+  date_of_birth?: string;
+  marital_status?: MaritalStatus | "";
+  family_details?: string;
+  temporary_address?: string;
+  permanent_address: string;
+  document_type: DocumentType;
+  document_number: string;
+}
+
+/** Compact KYC summary nested on a purchase. */
+export interface KycSummary {
+  id: number;
+  is_self: boolean;
+  full_name: string;
+  document_type: DocumentType;
+  status: KycStatus;
+}
 
 /** A customer's purchase of a policy, with the policy nested for one-request rendering. */
 export interface PolicyPurchase {
   id: number;
   policy: PolicySummary;
+  kyc: KycSummary | null;
+  insured_is_self: boolean;
   nominee_name: string;
   nominee_relationship: string;
   nominee_contact: string;
@@ -312,9 +387,24 @@ export interface PolicyPurchase {
 
 export interface PolicyPurchaseInput {
   policy: number;
+  kyc: number;
+  insured_is_self: boolean;
   nominee_name: string;
   nominee_relationship: string;
   nominee_contact: string;
+}
+
+/** A purchase awaiting issuance in the provider's queue. */
+export interface ProviderIssuanceItem {
+  id: number;
+  policy: PolicySummary;
+  kyc: KycSummary | null;
+  insured_is_self: boolean;
+  nominee_name: string;
+  nominee_relationship: string;
+  nominee_contact: string;
+  status: PurchaseStatus;
+  created_at: string;
 }
 
 export interface PaymentInitiateInput {
@@ -426,6 +516,15 @@ export const api = {
       }),
   },
 
+  /** Public provider onboarding enquiry — no token, submitted from `/for-providers`. */
+  leads: {
+    create: (payload: ProviderLeadInput) =>
+      apiFetch<MessageResponse>("/provider-leads/", {
+        method: "POST",
+        json: payload,
+      }),
+  },
+
   /** Endpoints that need a signed-in user's access token. */
   me: {
     get: (token: string) => apiFetch<AuthUser>("/auth/me/", { token }),
@@ -522,6 +621,38 @@ export const api = {
       authFetch<ProviderPolicy>(`/provider/policies/${id}/submit/`, {
         method: "POST",
       }),
+
+    /** Purchases forwarded to this provider, waiting for a policy number. */
+    listIssuance: (authFetch: AuthFetch) =>
+      authFetch<Paginated<ProviderIssuanceItem>>("/provider/issuance/"),
+
+    /** Issue a forwarded purchase by entering the provider's own policy number. */
+    issue: (authFetch: AuthFetch, id: number, policy_number: string) =>
+      authFetch<PolicyPurchase>(`/provider/issuance/${id}/issue/`, {
+        method: "POST",
+        json: { policy_number },
+      }),
+  },
+
+  /** Customer KYC — the reusable self record and per-beneficiary records. */
+  kyc: {
+    /** The customer's own reusable KYC, or `null` when not set up yet. */
+    getSelf: async (authFetch: AuthFetch): Promise<CustomerKyc | null> => {
+      try {
+        return await authFetch<CustomerKyc>("/kyc/self/");
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+
+    /** Create or update the reusable self KYC (multipart, with document images). */
+    saveSelf: (authFetch: AuthFetch, form: FormData, method: "PUT" | "PATCH" = "PUT") =>
+      authFetch<CustomerKyc>("/kyc/self/", { method, form }),
+
+    /** Capture a fresh beneficiary KYC when buying for someone else. */
+    createBeneficiary: (authFetch: AuthFetch, form: FormData) =>
+      authFetch<CustomerKyc>("/kyc/beneficiary/", { method: "POST", form }),
   },
 
   /** Customer-only endpoints for buying a policy and paying for it. */

@@ -146,7 +146,9 @@ class PaymentCallbackTests(APITestCase):
             "signature": esewa._sign(amount, reference, "EPAYTEST"),
         }
 
-    def test_successful_callback_activates_purchase(self):
+    def test_successful_callback_marks_purchase_paid_not_issued(self):
+        # Payment success means "paid, awaiting admin verification" — NOT issued.
+        # The purchase must not be activated and no policy number is assigned here.
         with mock.patch("apps.payments.gateways.esewa.verify", return_value=True):
             response = self.client.post(self.callback_url, self._payload(), format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -156,11 +158,10 @@ class PaymentCallbackTests(APITestCase):
         self.assertEqual(self.payment.status, Payment.Status.SUCCESS)
         self.assertEqual(self.payment.gateway_transaction_id, "0000ABC")
         self.assertIsNotNone(self.payment.paid_at)
-        self.assertEqual(self.purchase.status, PolicyPurchase.Status.ACTIVE)
-        self.assertTrue(self.purchase.policy_number)
-        self.assertTrue(self.purchase.policy_number.startswith("BIM-"))
-        self.assertIsNotNone(self.purchase.start_date)
-        self.assertIsNotNone(self.purchase.end_date)
+        self.assertEqual(self.purchase.status, PolicyPurchase.Status.PAID)
+        self.assertIsNone(self.purchase.policy_number)
+        self.assertIsNone(self.purchase.start_date)
+        self.assertIsNone(self.purchase.end_date)
 
     def test_failed_callback_leaves_purchase_retryable(self):
         with mock.patch("apps.payments.gateways.esewa.verify", return_value=False):

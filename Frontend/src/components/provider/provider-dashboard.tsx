@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
+import { IssuanceQueue } from "@/components/provider/issuance-queue";
 import { PolicyRow } from "@/components/provider/policy-row";
 import { Container } from "@/components/layout/container";
 import { Alert } from "@/components/ui/alert";
@@ -115,6 +116,8 @@ export function ProviderDashboard() {
               onDeleted={handleDeleted}
             />
           )}
+
+          {state.profile?.is_approved && <IssuanceQueue />}
         </div>
       )}
     </Container>

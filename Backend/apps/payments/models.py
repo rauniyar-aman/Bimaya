@@ -9,7 +9,9 @@ class Payment(TimeStampedModel):
     """One attempt to pay for a ``PolicyPurchase`` through a gateway.
 
     A purchase may have several payments (a failed attempt is retryable), but
-    only one can ever succeed — a successful payment activates the purchase.
+    only one can ever succeed. A successful payment marks the purchase ``PAID``;
+    it does not issue the policy — an admin verifies KYC + payment and forwards
+    it, then the provider issues it.
     """
 
     class Gateway(models.TextChoices):
@@ -48,7 +50,9 @@ class Payment(TimeStampedModel):
         self.save(
             update_fields=["status", "gateway_transaction_id", "paid_at", "updated_at"]
         )
-        self.policy_purchase.activate()
+        # Payment settled — the purchase now awaits admin verification of KYC +
+        # payment, then provider issuance. It is NOT activated here.
+        self.policy_purchase.mark_paid()
 
     def mark_failed(self):
         self.status = self.Status.FAILED
