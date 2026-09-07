@@ -1,6 +1,10 @@
 """Customer purchase endpoints (``/api/v1/purchases/``)."""
 
+from io import BytesIO
+
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.generics import (
@@ -17,8 +21,14 @@ from apps.core.permissions import (
     IsProvider,
     IsVerified,
 )
+from apps.payments.models import Payment
 
-from .exceptions import PurchaseNotCancellable, PurchaseNotIssuable
+from . import pdf
+from .exceptions import (
+    DocumentNotAvailable,
+    PurchaseNotCancellable,
+    PurchaseNotIssuable,
+)
 from .models import PolicyPurchase
 from .serializers import (
     PolicyIssueSerializer,
@@ -83,6 +93,72 @@ class PolicyPurchaseCancelView(PurchaseBase, GenericAPIView):
         purchase.status = PolicyPurchase.Status.CANCELLED
         purchase.save(update_fields=["status", "updated_at"])
         return Response(self.get_serializer(purchase).data, status=status.HTTP_200_OK)
+
+
+class PurchaseDocumentBase(PurchaseBase, GenericAPIView):
+    """Base for the owner-only PDF downloads.
+
+    Widens the queryset to prefetch ``kyc`` (the certificate reads holder
+    details straight off it), and resolves + permission-checks the purchase.
+    """
+
+    permission_classes = [IsCustomer, IsVerified, IsOwnerOrPlatformAdmin]
+
+    def get_queryset(self):
+        return PolicyPurchase.objects.for_customer(self.request.user).select_related(
+            "policy", "policy__provider", "policy__category", "kyc"
+        )
+
+    def get_purchase(self, request, pk):
+        purchase = get_object_or_404(self.get_queryset(), pk=pk)
+        self.check_object_permissions(request, purchase)
+        return purchase
+
+    @staticmethod
+    def _pdf_response(pdf_bytes, filename):
+        return FileResponse(
+            BytesIO(pdf_bytes),
+            as_attachment=True,
+            filename=filename,
+            content_type="application/pdf",
+        )
+
+
+@extend_schema(
+    tags=PURCHASE_TAG,
+    summary="Download the policy certificate (PDF)",
+    responses={200: OpenApiTypes.BINARY},
+)
+class PurchaseCertificateView(PurchaseDocumentBase):
+    def get(self, request, pk):
+        purchase = self.get_purchase(request, pk)
+        if not purchase.policy_number:
+            raise DocumentNotAvailable()
+        return self._pdf_response(
+            pdf.render_certificate(purchase),
+            f"Bimaya-Policy-{purchase.policy_number}.pdf",
+        )
+
+
+@extend_schema(
+    tags=PURCHASE_TAG,
+    summary="Download the payment receipt (PDF)",
+    responses={200: OpenApiTypes.BINARY},
+)
+class PurchaseReceiptView(PurchaseDocumentBase):
+    def get(self, request, pk):
+        purchase = self.get_purchase(request, pk)
+        payment = (
+            purchase.payments.filter(status=Payment.Status.SUCCESS)
+            .order_by("-paid_at")
+            .first()
+        )
+        if payment is None:
+            raise DocumentNotAvailable()
+        return self._pdf_response(
+            pdf.render_receipt(payment),
+            f"Bimaya-Receipt-{payment.gateway_transaction_id or payment.id}.pdf",
+        )
 
 
 class ProviderIssuanceBase:

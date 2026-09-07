@@ -6,10 +6,12 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.documents.models import CustomerKyc
+from apps.payments.models import Payment
 from apps.policies.models import InsuranceCategory, Policy
 from apps.providers.models import Provider
 
@@ -365,3 +367,88 @@ class ProviderIssuanceTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["code"], "purchase_not_issuable")
+
+
+@no_throttle
+class PurchaseDocumentTests(APITestCase):
+    """Owner-only certificate + receipt PDF downloads."""
+
+    def setUp(self):
+        self.category = InsuranceCategory.objects.create(name="Life")
+        self.provider = make_provider()
+        self.policy = make_policy(self.provider, self.category)
+        self.customer = make_customer()
+        self.purchase = PolicyPurchase.objects.create(
+            customer=self.customer,
+            policy=self.policy,
+            kyc=make_self_kyc(self.customer, status=CustomerKyc.Status.VERIFIED),
+            nominee_name="Sita Sharma",
+            nominee_relationship="Spouse",
+            nominee_contact="9800000000",
+            status=PolicyPurchase.Status.ACTIVE,
+            policy_number="NLI-2026-0001",
+            start_date=date(2026, 9, 7),
+            end_date=date(2027, 9, 7),
+        )
+
+    def _get(self, name):
+        return self.client.get(reverse(name, args=[self.purchase.id]))
+
+    def _pdf_bytes(self, response):
+        return b"".join(response.streaming_content)
+
+    def test_owner_downloads_certificate_pdf(self):
+        self.client.force_authenticate(self.customer)
+        response = self._get("purchase-certificate")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertIn("Bimaya-Policy-NLI-2026-0001.pdf", response["Content-Disposition"])
+        self.assertTrue(self._pdf_bytes(response).startswith(b"%PDF"))
+
+    def test_certificate_unavailable_before_issue(self):
+        self.purchase.status = PolicyPurchase.Status.PAID
+        self.purchase.policy_number = None
+        self.purchase.save(update_fields=["status", "policy_number"])
+        self.client.force_authenticate(self.customer)
+        response = self._get("purchase-certificate")
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "document_not_available")
+
+    def test_other_customer_cannot_download_certificate(self):
+        self.client.force_authenticate(make_customer("other@bimaya.test"))
+        response = self._get("purchase-certificate")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_anonymous_cannot_download_certificate(self):
+        response = self._get("purchase-certificate")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_owner_downloads_receipt_after_payment(self):
+        Payment.objects.create(
+            policy_purchase=self.purchase,
+            amount=self.policy.premium,
+            gateway=Payment.Gateway.ESEWA,
+            status=Payment.Status.SUCCESS,
+            gateway_transaction_id="TXN-123",
+            paid_at=timezone.now(),
+        )
+        self.client.force_authenticate(self.customer)
+        response = self._get("purchase-receipt")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertTrue(self._pdf_bytes(response).startswith(b"%PDF"))
+
+    def test_receipt_unavailable_without_successful_payment(self):
+        # An initiated-but-not-succeeded payment must not yield a receipt.
+        Payment.objects.create(
+            policy_purchase=self.purchase,
+            amount=self.policy.premium,
+            gateway=Payment.Gateway.KHALTI,
+            status=Payment.Status.INITIATED,
+        )
+        self.client.force_authenticate(self.customer)
+        response = self._get("purchase-receipt")
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "document_not_available")

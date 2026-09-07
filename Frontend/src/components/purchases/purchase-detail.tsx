@@ -12,6 +12,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { StatusPill } from "@/components/ui/status-pill";
 import { formatDate } from "@/lib/date";
 import { formatFrequency, formatNpr, formatTerm } from "@/lib/format";
+import { saveBlob } from "@/lib/download";
 import { ApiError, api, errorMessage, type PolicyPurchase } from "@/lib/api";
 
 type State =
@@ -119,6 +120,19 @@ function PurchaseBody({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const [downloading, setDownloading] = useState<
+    null | "certificate" | "receipt"
+  >(null);
+  const [docError, setDocError] = useState("");
+
+  // The certificate exists once a policy number has been issued; a receipt
+  // exists once a payment has succeeded (every status past pending, except a
+  // cancelled purchase — which can only be cancelled before it is ever paid).
+  const canDownloadCertificate = Boolean(purchase.policy_number);
+  const canDownloadReceipt =
+    purchase.status !== "PENDING_PAYMENT" && purchase.status !== "CANCELLED";
+  const hasDocuments = canDownloadCertificate || canDownloadReceipt;
+
   async function handleCancel() {
     if (
       !window.confirm(
@@ -134,6 +148,24 @@ function PurchaseBody({
     } catch (err) {
       setError(errorMessage(err, "Could not cancel this purchase."));
       setBusy(false);
+    }
+  }
+
+  async function handleDownload(kind: "certificate" | "receipt") {
+    setDocError("");
+    setDownloading(kind);
+    try {
+      if (kind === "certificate") {
+        const blob = await api.purchases.certificate(authFetch, purchase.id);
+        saveBlob(blob, `Bimaya-Policy-${purchase.policy_number}.pdf`);
+      } else {
+        const blob = await api.purchases.receipt(authFetch, purchase.id);
+        saveBlob(blob, `Bimaya-Receipt-${purchase.policy_number ?? purchase.id}.pdf`);
+      }
+    } catch (err) {
+      setDocError(errorMessage(err, `Could not download the ${kind}.`));
+    } finally {
+      setDownloading(null);
     }
   }
 
@@ -197,6 +229,66 @@ function PurchaseBody({
             </dl>
           </CardContent>
         </Card>
+
+        {hasDocuments && (
+          <Card>
+            <CardContent className="space-y-4">
+              <div>
+                <h2 className="font-display text-lg font-semibold text-ink">
+                  Documents
+                </h2>
+                <p className="mt-1 text-sm text-muted">
+                  Download your policy paperwork as PDF.
+                </p>
+              </div>
+              {docError && <Alert variant="error">{docError}</Alert>}
+              <div className="flex flex-wrap gap-2.5">
+                {canDownloadCertificate && (
+                  <Button
+                    variant="primary"
+                    onClick={() => handleDownload("certificate")}
+                    loading={downloading === "certificate"}
+                    disabled={downloading !== null}
+                  >
+                    Download certificate (PDF)
+                  </Button>
+                )}
+                {canDownloadReceipt && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => handleDownload("receipt")}
+                    loading={downloading === "receipt"}
+                    disabled={downloading !== null}
+                  >
+                    Download receipt (PDF)
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {purchase.status === "ACTIVE" && (
+          <Card>
+            <CardContent className="space-y-4">
+              <div>
+                <h2 className="font-display text-lg font-semibold text-ink">
+                  Need to make a claim?
+                </h2>
+                <p className="mt-1 text-sm text-muted">
+                  If something covered by this policy has happened, file a claim
+                  and track it through to settlement.
+                </p>
+              </div>
+              <Link
+                href={`/dashboard/claims/new?purchase=${purchase.id}`}
+                className={buttonVariants({ variant: "cta", size: "md" })}
+              >
+                File a claim
+              </Link>
+            </CardContent>
+          </Card>
+        )}
 
         {purchase.status === "PENDING_PAYMENT" && (
           <Card>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
+import { ClaimReviewQueue } from "@/components/provider/claim-review-queue";
 import { IssuanceQueue } from "@/components/provider/issuance-queue";
 import { PolicyRow } from "@/components/provider/policy-row";
 import { Container } from "@/components/layout/container";
@@ -117,7 +118,12 @@ export function ProviderDashboard() {
             />
           )}
 
-          {state.profile?.is_approved && <IssuanceQueue />}
+          {state.profile?.is_approved && (
+            <>
+              <IssuanceQueue />
+              <ClaimReviewQueue />
+            </>
+          )}
         </div>
       )}
     </Container>

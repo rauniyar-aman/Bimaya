@@ -8,6 +8,8 @@ from .views import (
     PolicyPurchaseListCreateView,
     ProviderIssuanceListView,
     ProviderIssueView,
+    PurchaseCertificateView,
+    PurchaseReceiptView,
 )
 
 urlpatterns = [
@@ -17,6 +19,16 @@ urlpatterns = [
         "purchases/<int:pk>/cancel/",
         PolicyPurchaseCancelView.as_view(),
         name="purchase-cancel",
+    ),
+    path(
+        "purchases/<int:pk>/certificate/",
+        PurchaseCertificateView.as_view(),
+        name="purchase-certificate",
+    ),
+    path(
+        "purchases/<int:pk>/receipt/",
+        PurchaseReceiptView.as_view(),
+        name="purchase-receipt",
     ),
     # Provider issuance queue (declared distinctly from the customer routes).
     path(

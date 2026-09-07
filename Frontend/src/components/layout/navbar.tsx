@@ -128,6 +128,13 @@ export function Navbar() {
                 >
                   My policies
                 </Link>
+                <Link
+                  href="/dashboard/claims"
+                  onClick={() => setOpen(false)}
+                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
+                >
+                  My claims
+                </Link>
                 {user.role === "PROVIDER" && (
                   <Link
                     href="/provider"

@@ -35,6 +35,12 @@ export interface ApiFetchOptions extends RequestInit {
    * the `Content-Type` (with the boundary), so we never set it ourselves.
    */
   form?: FormData;
+  /**
+   * Read the response as a binary `Blob` instead of JSON/text — for file
+   * downloads (e.g. generated PDFs). A JSON error envelope is still parsed on
+   * failure so `errorMessage`/`errorCode` keep working.
+   */
+  blob?: boolean;
   /** Override the API base — pass `""` to call a same-origin Next route. */
   baseUrl?: string;
 }
@@ -50,6 +56,7 @@ export async function apiFetch<T>(
     token,
     json,
     form,
+    blob,
     baseUrl = API_BASE_URL,
     ...rest
   } = options;
@@ -72,6 +79,20 @@ export async function apiFetch<T>(
     ...(payload !== undefined ? { body: payload } : {}),
     ...rest,
   });
+
+  // Binary downloads: read the body as a Blob, but still surface a JSON error
+  // envelope on failure (the backend returns one even for a PDF endpoint).
+  if (blob) {
+    if (!res.ok) {
+      const errData = await res.json().catch(() => null);
+      const detail =
+        errData && typeof errData === "object" && "detail" in errData
+          ? String((errData as { detail: unknown }).detail)
+          : res.statusText;
+      throw new ApiError(detail || "Request failed", res.status, errData);
+    }
+    return (await res.blob()) as T;
+  }
 
   const isJson = res.headers.get("content-type")?.includes("application/json");
   const data = isJson ? await res.json().catch(() => null) : await res.text();
@@ -426,6 +447,79 @@ export interface PaymentCallbackResult {
   status: string;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Claims shapes                                                              */
+/* -------------------------------------------------------------------------- */
+
+export type ClaimStatus =
+  | "SUBMITTED"
+  | "UNDER_REVIEW"
+  | "MORE_INFO"
+  | "APPROVED"
+  | "REJECTED"
+  | "SETTLED";
+
+export type ClaimPayoutStatus = "INITIATED" | "SUCCESS" | "FAILED";
+
+/**
+ * A supporting file on a claim. The file itself is fetched through the
+ * authenticated download endpoint (never a raw media URL) — these are sensitive
+ * medical/police/financial documents — so only its metadata is exposed here.
+ */
+export interface ClaimDocument {
+  id: number;
+  caption: string;
+  created_at: string;
+}
+
+/** A simulated payout attached to an approved claim (no real money moves). */
+export interface ClaimPayoutSummary {
+  id: number;
+  gateway: PaymentGateway;
+  amount: string;
+  status: ClaimPayoutStatus;
+  gateway_reference: string | null;
+  paid_at: string | null;
+  created_at: string;
+}
+
+/** The policy purchase a claim is filed against, with the policy nested. */
+export interface ClaimPurchaseSummary {
+  id: number;
+  policy: PolicySummary;
+  policy_number: string | null;
+  status: PurchaseStatus;
+}
+
+/** A customer's insurance claim, with purchase, documents and payouts nested. */
+export interface Claim {
+  id: number;
+  purchase: ClaimPurchaseSummary;
+  status: ClaimStatus;
+  incident_date: string;
+  incident_location: string;
+  description: string;
+  claimed_amount: string;
+  approved_amount: string | null;
+  review_note: string;
+  documents: ClaimDocument[];
+  payouts: ClaimPayoutSummary[];
+  decided_at: string | null;
+  settled_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** The simulated gateway session returned when a payout is initiated. */
+export interface ClaimPayoutInitiateResult {
+  payout_id: number;
+  gateway: PaymentGateway;
+  amount: string;
+  reference: string;
+  status: ClaimPayoutStatus;
+  simulated: boolean;
+}
+
 /**
  * Signature of the `authFetch` provided by `useAuth()`. Provider endpoints take
  * it as their first argument so calls stay typed without re-threading the token.
@@ -632,6 +726,56 @@ export const api = {
         method: "POST",
         json: { policy_number },
       }),
+
+    /** Claims filed on this provider's policies, newest first; optional `?status=`. */
+    listClaims: (authFetch: AuthFetch, status?: ClaimStatus) =>
+      authFetch<Paginated<Claim>>(`/provider/claims/${toQuery({ status })}`),
+
+    getClaim: (authFetch: AuthFetch, id: number) =>
+      authFetch<Claim>(`/provider/claims/${id}/`),
+
+    /** Move a submitted claim into review (required before any decision). */
+    startReviewClaim: (authFetch: AuthFetch, id: number) =>
+      authFetch<Claim>(`/provider/claims/${id}/start-review/`, { method: "POST" }),
+
+    /** Bounce a claim back to the customer for more information. */
+    requestInfoClaim: (authFetch: AuthFetch, id: number, note: string) =>
+      authFetch<Claim>(`/provider/claims/${id}/request-info/`, {
+        method: "POST",
+        json: { note },
+      }),
+
+    /** Approve a claim for a payout amount. */
+    approveClaim: (
+      authFetch: AuthFetch,
+      id: number,
+      payload: { approved_amount: string; note?: string },
+    ) =>
+      authFetch<Claim>(`/provider/claims/${id}/approve/`, {
+        method: "POST",
+        json: payload,
+      }),
+
+    /** Reject a claim with a reason. */
+    rejectClaim: (authFetch: AuthFetch, id: number, note: string) =>
+      authFetch<Claim>(`/provider/claims/${id}/reject/`, {
+        method: "POST",
+        json: { note },
+      }),
+
+    /** Start a simulated payout for an approved claim (no real money moves). */
+    payoutInitiateClaim: (authFetch: AuthFetch, id: number, gateway: PaymentGateway) =>
+      authFetch<ClaimPayoutInitiateResult>(
+        `/provider/claims/${id}/payout/initiate/`,
+        { method: "POST", json: { gateway } },
+      ),
+
+    /** Confirm the simulated payout, settling the claim. */
+    payoutConfirmClaim: (authFetch: AuthFetch, id: number, payoutId?: number) =>
+      authFetch<Claim>(`/provider/claims/${id}/payout/confirm/`, {
+        method: "POST",
+        json: payoutId ? { payout_id: payoutId } : {},
+      }),
   },
 
   /** Customer KYC — the reusable self record and per-beneficiary records. */
@@ -668,6 +812,33 @@ export const api = {
 
     cancel: (authFetch: AuthFetch, id: number) =>
       authFetch<PolicyPurchase>(`/purchases/${id}/cancel/`, { method: "POST" }),
+
+    /** Download the Certificate of Insurance PDF (available once issued). */
+    certificate: (authFetch: AuthFetch, id: number) =>
+      authFetch<Blob>(`/purchases/${id}/certificate/`, { blob: true }),
+
+    /** Download the payment receipt PDF (available once a payment succeeds). */
+    receipt: (authFetch: AuthFetch, id: number) =>
+      authFetch<Blob>(`/purchases/${id}/receipt/`, { blob: true }),
+  },
+
+  /** Customer-only endpoints for filing and tracking insurance claims. */
+  claims: {
+    list: (authFetch: AuthFetch) => authFetch<Paginated<Claim>>("/claims/"),
+
+    get: (authFetch: AuthFetch, id: number) => authFetch<Claim>(`/claims/${id}/`),
+
+    /** File a claim (multipart — one or more supporting documents attached). */
+    create: (authFetch: AuthFetch, form: FormData) =>
+      authFetch<Claim>("/claims/", { method: "POST", form }),
+
+    /** Resubmit a claim sent back for more information (multipart, +documents). */
+    resubmit: (authFetch: AuthFetch, id: number, form: FormData) =>
+      authFetch<Claim>(`/claims/${id}/resubmit/`, { method: "POST", form }),
+
+    /** Download a supporting document via the authenticated owner/underwriter route. */
+    document: (authFetch: AuthFetch, claimId: number, docId: number) =>
+      authFetch<Blob>(`/claims/${claimId}/documents/${docId}/`, { blob: true }),
   },
 
   payments: {
