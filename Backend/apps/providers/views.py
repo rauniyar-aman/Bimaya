@@ -1,5 +1,6 @@
 """Provider-facing API endpoints (``/api/v1/provider/``)."""
 
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
@@ -7,6 +8,7 @@ from rest_framework.response import Response
 
 from apps.core.permissions import IsProvider, IsVerified
 
+from .analytics import build_provider_analytics
 from .exceptions import ProviderProfileNotFound
 from .models import Provider
 from .serializers import ProviderProfileSerializer
@@ -54,3 +56,25 @@ class ProviderProfileView(GenericAPIView):
             serializer.data,
             status=status.HTTP_201_CREATED if is_create else status.HTTP_200_OK,
         )
+
+
+@extend_schema(
+    tags=["analytics"],
+    summary="Own provider analytics",
+    responses=OpenApiTypes.OBJECT,
+)
+class ProviderAnalyticsView(GenericAPIView):
+    """Analytics scoped to the signed-in provider's own policies.
+
+    Totals, status breakdowns and a recent monthly trend, all filtered to the
+    provider's book of business. 404 (``provider_profile_missing``) when the
+    provider has not created a profile yet, mirroring the profile endpoint.
+    """
+
+    permission_classes = [IsProvider, IsVerified]
+
+    def get(self, request):
+        provider = Provider.objects.filter(user=request.user).first()
+        if provider is None:
+            raise ProviderProfileNotFound()
+        return Response(build_provider_analytics(provider))

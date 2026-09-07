@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { ClaimReviewQueue } from "@/components/provider/claim-review-queue";
 import { IssuanceQueue } from "@/components/provider/issuance-queue";
 import { PolicyRow } from "@/components/provider/policy-row";
+import { ProviderAnalyticsSection } from "@/components/provider/provider-analytics";
 import { Container } from "@/components/layout/container";
 import { Alert } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
@@ -120,6 +121,7 @@ export function ProviderDashboard() {
 
           {state.profile?.is_approved && (
             <>
+              <ProviderAnalyticsSection />
               <IssuanceQueue />
               <ClaimReviewQueue />
             </>

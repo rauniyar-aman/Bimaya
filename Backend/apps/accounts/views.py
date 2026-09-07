@@ -9,6 +9,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
+from apps.notifications import services as notifications
+
 from .models import OTP
 from .serializers import (
     ChangePasswordSerializer,
@@ -107,6 +109,7 @@ class VerifyOTPView(GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        notifications.notify_welcome(user)
         return Response(
             {"detail": "Your account is verified. Welcome to Bimaya.", **_tokens_for(user)}
         )

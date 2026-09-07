@@ -520,6 +520,216 @@ export interface ClaimPayoutInitiateResult {
   simulated: boolean;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Notification shapes                                                        */
+/* -------------------------------------------------------------------------- */
+
+export type NotificationType =
+  | "WELCOME"
+  | "PURCHASE_CREATED"
+  | "PAYMENT_CONFIRMED"
+  | "PAYMENT_FAILED"
+  | "PURCHASE_FORWARDED"
+  | "POLICY_ISSUED"
+  | "RENEWAL_REMINDER"
+  | "CLAIM_SUBMITTED"
+  | "CLAIM_UNDER_REVIEW"
+  | "CLAIM_MORE_INFO"
+  | "CLAIM_APPROVED"
+  | "CLAIM_REJECTED"
+  | "CLAIM_SETTLED"
+  | "KYC_VERIFIED"
+  | "KYC_REJECTED"
+  | "PROVIDER_APPROVED"
+  | "PROVIDER_NEW_ISSUANCE"
+  | "PROVIDER_NEW_CLAIM";
+
+/** An in-app notification for the signed-in user. */
+export interface AppNotification {
+  id: number;
+  type: NotificationType;
+  title: string;
+  body: string;
+  url: string;
+  read_at: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Admin-panel shapes                                                         */
+/* -------------------------------------------------------------------------- */
+
+/** A provider row in the admin approvals table, with the owning account. */
+export interface AdminProvider {
+  id: number;
+  company_name: string;
+  slug: string;
+  registration_number: string;
+  description: string;
+  logo: string | null;
+  website: string;
+  support_email: string;
+  support_phone: string;
+  kyc_status: KycStatus;
+  is_approved: boolean;
+  owner_email: string;
+  owner_name: string;
+  policy_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * A full KYC record for admin review. Document images are fetched through the
+ * authenticated download endpoints — never raw media URLs — so only the
+ * availability flags (`has_front`/`has_back`) are exposed here.
+ */
+export interface AdminKyc {
+  id: number;
+  customer_email: string;
+  is_self: boolean;
+  full_name: string;
+  email: string;
+  phone: string;
+  date_of_birth: string | null;
+  marital_status: MaritalStatus | "";
+  family_details: string;
+  temporary_address: string;
+  permanent_address: string;
+  document_type: DocumentType;
+  document_number: string;
+  has_front: boolean;
+  has_back: boolean;
+  status: KycStatus;
+  review_note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A user row in the admin users table. */
+export interface AdminUser {
+  id: number;
+  email: string;
+  full_name: string;
+  phone: string;
+  role: UserRole;
+  is_active: boolean;
+  is_verified: boolean;
+  date_joined: string;
+}
+
+/** A single user with activity counts. */
+export interface AdminUserDetail extends AdminUser {
+  purchase_count: number;
+  claim_count: number;
+}
+
+/** A policy row in the admin all-policies table (reuses the public list shape plus status). */
+export interface AdminPolicy extends PolicySummary {
+  status: PolicyStatus;
+  created_at: string;
+}
+
+/** A purchase row in the admin verification table — the purchase shape plus the buying customer. */
+export interface AdminPurchase extends PolicyPurchase {
+  customer_email: string;
+  customer_name: string;
+}
+
+export interface AdminProviderListParams {
+  is_approved?: boolean;
+  kyc_status?: KycStatus;
+  search?: string;
+  page?: number;
+}
+
+export interface AdminKycListParams {
+  status?: KycStatus;
+  is_self?: boolean;
+  search?: string;
+  page?: number;
+}
+
+export interface AdminPurchaseListParams {
+  status?: PurchaseStatus;
+  search?: string;
+  page?: number;
+}
+
+export interface AdminUserListParams {
+  role?: UserRole;
+  is_verified?: boolean;
+  is_active?: boolean;
+  search?: string;
+  page?: number;
+}
+
+export interface AdminPolicyListParams {
+  status?: PolicyStatus;
+  provider?: number;
+  category?: number;
+  is_featured?: boolean;
+  search?: string;
+  page?: number;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Analytics shapes                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A headline metric for a stat card. `value` is a plain number for counts and a
+ * decimal string for currency amounts; `format` says which, so the frontend
+ * renders it as a raw count or through `formatNpr`.
+ */
+export interface AnalyticsStat {
+  key: string;
+  label: string;
+  value: number | string;
+  format: "count" | "currency";
+}
+
+/** One labelled bar in a breakdown chart (status counts, users by role, …). */
+export interface AnalyticsBreakdown {
+  key: string;
+  label: string;
+  value: number;
+}
+
+/** One month in the trend series: a purchase count and premium collected. */
+export interface AnalyticsMonth {
+  /** `YYYY-MM`. */
+  month: string;
+  /** Short month label, e.g. `Sep`. */
+  label: string;
+  purchases: number;
+  /** Decimal string (premium collected that month). */
+  premium: string;
+}
+
+/** Fields shared by the admin and provider analytics payloads. */
+export interface AnalyticsData {
+  stats: AnalyticsStat[];
+  purchases_by_status: AnalyticsBreakdown[];
+  claims_by_status: AnalyticsBreakdown[];
+  monthly: AnalyticsMonth[];
+}
+
+/** Platform-wide analytics for the admin dashboard. */
+export interface AdminAnalytics extends AnalyticsData {
+  users_by_role: AnalyticsBreakdown[];
+  providers: { total: number; approved: number; pending: number };
+  queues: {
+    pending_providers: number;
+    pending_kyc: number;
+    paid_purchases: number;
+  };
+}
+
+/** Analytics scoped to a single provider's own policies. */
+export type ProviderAnalytics = AnalyticsData;
+
 /**
  * Signature of the `authFetch` provided by `useAuth()`. Provider endpoints take
  * it as their first argument so calls stay typed without re-threading the token.
@@ -685,6 +895,10 @@ export const api = {
       payload: ProviderProfileInput,
       method: "PUT" | "PATCH" = "PUT",
     ) => authFetch<ProviderProfile>("/provider/profile/", { method, json: payload }),
+
+    /** Analytics scoped to this provider's own policies. */
+    analytics: (authFetch: AuthFetch) =>
+      authFetch<ProviderAnalytics>("/provider/analytics/"),
 
     listPolicies: (authFetch: AuthFetch) =>
       authFetch<Paginated<ProviderPolicy>>("/provider/policies/"),
@@ -854,5 +1068,104 @@ export const api = {
         `/payments/${gateway.toLowerCase()}/callback/?${params.toString()}`,
         { noCredentials: true },
       ),
+  },
+
+  /** In-app notifications for the signed-in user. */
+  notifications: {
+    list: (authFetch: AuthFetch, params: { unread?: boolean; page?: number } = {}) =>
+      authFetch<Paginated<AppNotification>>(
+        `/notifications/${toQuery({
+          unread: params.unread ? "true" : undefined,
+          page: params.page,
+        })}`,
+      ),
+
+    unreadCount: (authFetch: AuthFetch) =>
+      authFetch<{ count: number }>("/notifications/unread-count/"),
+
+    markRead: (authFetch: AuthFetch, id: number) =>
+      authFetch<AppNotification>(`/notifications/${id}/read/`, { method: "POST" }),
+
+    markAllRead: (authFetch: AuthFetch) =>
+      authFetch<{ updated: number }>("/notifications/read-all/", { method: "POST" }),
+  },
+
+  /**
+   * Admin-panel endpoints (`/admin/...`), all gated by `IsPlatformAdmin`. These
+   * back the branded in-app `/admin` area; the Django admin remains the
+   * low-level fallback.
+   */
+  admin: {
+    /* Providers */
+    listProviders: (authFetch: AuthFetch, params: AdminProviderListParams = {}) =>
+      authFetch<Paginated<AdminProvider>>(
+        `/admin/providers/${toQuery(params as Record<string, unknown>)}`,
+      ),
+
+    getProvider: (authFetch: AuthFetch, id: number) =>
+      authFetch<AdminProvider>(`/admin/providers/${id}/`),
+
+    approveProvider: (authFetch: AuthFetch, id: number) =>
+      authFetch<AdminProvider>(`/admin/providers/${id}/approve/`, {
+        method: "POST",
+      }),
+
+    revokeProvider: (authFetch: AuthFetch, id: number) =>
+      authFetch<AdminProvider>(`/admin/providers/${id}/revoke/`, {
+        method: "POST",
+      }),
+
+    /* KYC */
+    listKyc: (authFetch: AuthFetch, params: AdminKycListParams = {}) =>
+      authFetch<Paginated<AdminKyc>>(
+        `/admin/kyc/${toQuery(params as Record<string, unknown>)}`,
+      ),
+
+    getKyc: (authFetch: AuthFetch, id: number) =>
+      authFetch<AdminKyc>(`/admin/kyc/${id}/`),
+
+    /** Download a KYC document image (PII) via the authenticated admin route. */
+    kycDocument: (authFetch: AuthFetch, id: number, side: "front" | "back") =>
+      authFetch<Blob>(`/admin/kyc/${id}/document/${side}/`, { blob: true }),
+
+    verifyKyc: (authFetch: AuthFetch, id: number) =>
+      authFetch<CustomerKyc>(`/admin/kyc/${id}/verify/`, { method: "POST" }),
+
+    rejectKyc: (authFetch: AuthFetch, id: number, note: string) =>
+      authFetch<CustomerKyc>(`/admin/kyc/${id}/reject/`, {
+        method: "POST",
+        json: { note },
+      }),
+
+    /* Purchases */
+    listPurchases: (authFetch: AuthFetch, params: AdminPurchaseListParams = {}) =>
+      authFetch<Paginated<AdminPurchase>>(
+        `/admin/purchases/${toQuery(params as Record<string, unknown>)}`,
+      ),
+
+    /** Verify payment + KYC and forward a paid purchase to its provider. */
+    verifyAndForwardPurchase: (authFetch: AuthFetch, id: number) =>
+      authFetch<AdminPurchase>(`/admin/purchases/${id}/verify-and-forward/`, {
+        method: "POST",
+      }),
+
+    /* Users */
+    listUsers: (authFetch: AuthFetch, params: AdminUserListParams = {}) =>
+      authFetch<Paginated<AdminUser>>(
+        `/admin/users/${toQuery(params as Record<string, unknown>)}`,
+      ),
+
+    getUser: (authFetch: AuthFetch, id: number) =>
+      authFetch<AdminUserDetail>(`/admin/users/${id}/`),
+
+    /* Policies */
+    listPolicies: (authFetch: AuthFetch, params: AdminPolicyListParams = {}) =>
+      authFetch<Paginated<AdminPolicy>>(
+        `/admin/policies/${toQuery(params as Record<string, unknown>)}`,
+      ),
+
+    /* Analytics */
+    analytics: (authFetch: AuthFetch) =>
+      authFetch<AdminAnalytics>("/admin/analytics/"),
   },
 };

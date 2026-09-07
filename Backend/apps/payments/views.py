@@ -9,6 +9,8 @@ from rest_framework.views import APIView
 
 from apps.core.permissions import IsCustomer, IsVerified
 
+from apps.notifications import services as notifications
+
 from .gateways import esewa, khalti
 from .models import Payment
 from .serializers import PaymentInitiateSerializer
@@ -85,7 +87,9 @@ class PaymentCallbackView(APIView):
                 or f"{gateway_code}-{payment.id}"
             )
             payment.mark_success(transaction_id)
+            notifications.notify_payment_confirmed(payment.policy_purchase)
             return Response({"detail": "Payment confirmed.", "status": payment.status})
 
         payment.mark_failed()
+        notifications.notify_payment_failed(payment.policy_purchase)
         return Response({"detail": "Payment verification failed.", "status": payment.status})

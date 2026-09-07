@@ -21,6 +21,7 @@ from apps.core.permissions import (
     IsProvider,
     IsVerified,
 )
+from apps.notifications import services as notifications
 from apps.payments.models import Payment
 
 from . import pdf
@@ -66,6 +67,7 @@ class PolicyPurchaseListCreateView(PurchaseBase, ListCreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
+        notifications.notify_purchase_created(serializer.instance)
         output = PolicyPurchaseSerializer(serializer.instance).data
         headers = self.get_success_headers(output)
         return Response(output, status=status.HTTP_201_CREATED, headers=headers)
@@ -205,6 +207,7 @@ class ProviderIssueView(ProviderIssuanceBase, GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         purchase.issue(serializer.validated_data["policy_number"])
+        notifications.notify_policy_issued(purchase)
         return Response(
             PolicyPurchaseSerializer(purchase).data, status=status.HTTP_200_OK
         )

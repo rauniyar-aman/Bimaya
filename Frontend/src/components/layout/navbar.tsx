@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { Logo } from "@/components/brand/logo";
 import { Container } from "@/components/layout/container";
 import { UserMenu } from "@/components/layout/user-menu";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
@@ -48,7 +49,10 @@ export function Navbar() {
               className="h-10 w-40 animate-pulse rounded-full bg-surface"
             />
           ) : isAuthenticated ? (
-            <UserMenu />
+            <>
+              <NotificationBell />
+              <UserMenu />
+            </>
           ) : (
             <>
               <Link href="/login" className={buttonVariants({ variant: "ghost", size: "sm" })}>
@@ -135,6 +139,13 @@ export function Navbar() {
                 >
                   My claims
                 </Link>
+                <Link
+                  href="/dashboard/notifications"
+                  onClick={() => setOpen(false)}
+                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
+                >
+                  Notifications
+                </Link>
                 {user.role === "PROVIDER" && (
                   <Link
                     href="/provider"
@@ -142,6 +153,15 @@ export function Navbar() {
                     className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
                   >
                     Provider area
+                  </Link>
+                )}
+                {user.role === "ADMIN" && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setOpen(false)}
+                    className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
+                  >
+                    Admin panel
                   </Link>
                 )}
                 <button

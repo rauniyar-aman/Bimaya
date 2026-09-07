@@ -60,6 +60,8 @@ LOCAL_APPS = [
     "apps.documents",
     "apps.claims",
     "apps.leads",
+    "apps.notifications",
+    "apps.adminpanel",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -182,6 +184,14 @@ OTP_MAX_ATTEMPTS = env.int("OTP_MAX_ATTEMPTS", default=5)
 # In development there is no SMS gateway, so the code is returned in the API
 # response to keep the signup flow testable. This MUST stay off in production.
 OTP_RETURN_IN_RESPONSE = env.bool("OTP_RETURN_IN_RESPONSE", default=DEBUG)
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+# In-app + email notifications are always on. SMS is a paid channel, so it is
+# off by default and behind a pluggable adapter (apps/notifications/sms.py);
+# flip this on and wire a real gateway there to enable it.
+NOTIFICATIONS_SMS_ENABLED = env.bool("NOTIFICATIONS_SMS_ENABLED", default=False)
 
 # ---------------------------------------------------------------------------
 # CORS (locked to the frontend origin)

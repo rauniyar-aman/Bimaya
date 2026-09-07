@@ -17,6 +17,23 @@ export function formatDate(value: string | null | undefined): string {
   });
 }
 
+/** "just now" / "5m ago" / "3h ago" / "2d ago", falling back to a date. */
+export function formatRelativeTime(value: string | null | undefined): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const seconds = Math.round((Date.now() - date.getTime()) / 1000);
+  if (seconds < 45) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return formatDate(value);
+}
+
 /**
  * Whole days from today until `value` (negative once it is in the past).
  * Returns `null` when the value is missing or unparseable.

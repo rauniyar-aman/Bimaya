@@ -42,12 +42,18 @@ class CustomerKycAdmin(admin.ModelAdmin):
 
     @admin.action(description="Mark selected KYC as verified")
     def mark_verified(self, request, queryset):
-        updated = queryset.update(status=CustomerKyc.Status.VERIFIED, review_note="")
-        self.message_user(request, f"{updated} KYC record(s) verified.")
+        count = 0
+        for kyc in queryset:
+            kyc.mark_verified()
+            count += 1
+        self.message_user(request, f"{count} KYC record(s) verified.")
 
     @admin.action(description="Mark selected KYC as rejected")
     def mark_rejected(self, request, queryset):
-        updated = queryset.update(status=CustomerKyc.Status.REJECTED)
-        self.message_user(request, f"{updated} KYC record(s) rejected.")
+        count = 0
+        for kyc in queryset:
+            kyc.mark_rejected("Rejected by administrator.")
+            count += 1
+        self.message_user(request, f"{count} KYC record(s) rejected.")
 
     actions = ["mark_verified", "mark_rejected"]

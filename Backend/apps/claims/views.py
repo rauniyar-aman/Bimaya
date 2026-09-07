@@ -32,6 +32,7 @@ from apps.core.permissions import (
     IsProvider,
     IsVerified,
 )
+from apps.notifications import services as notifications
 
 from .exceptions import (
     ClaimNotDecidable,
@@ -92,7 +93,10 @@ class ClaimListCreateView(ClaimBase, ListCreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
-        output = ClaimSerializer(serializer.instance).data
+        claim = serializer.instance
+        notifications.notify_claim_status(claim, "SUBMITTED")
+        notifications.notify_provider_new_claim(claim)
+        output = ClaimSerializer(claim).data
         headers = self.get_success_headers(output)
         return Response(output, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -123,6 +127,7 @@ class ClaimResubmitView(ClaimBase, GenericAPIView):
                 [ClaimDocument(claim=claim, file=upload) for upload in uploads]
             )
         claim.resubmit()
+        notifications.notify_provider_new_claim(claim)
         return Response(ClaimSerializer(claim).data, status=status.HTTP_200_OK)
 
 
@@ -204,6 +209,7 @@ class ProviderClaimStartReviewView(ProviderClaimBase, GenericAPIView):
         if claim.status != Claim.Status.SUBMITTED:
             raise ClaimNotDecidable()
         claim.start_review()
+        notifications.notify_claim_status(claim, "UNDER_REVIEW")
         return Response(ClaimSerializer(claim).data, status=status.HTTP_200_OK)
 
 
@@ -223,6 +229,7 @@ class ProviderClaimRequestInfoView(ProviderClaimBase, GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         claim.request_more_info(serializer.validated_data["note"])
+        notifications.notify_claim_status(claim, "MORE_INFO")
         return Response(ClaimSerializer(claim).data, status=status.HTTP_200_OK)
 
 
@@ -245,6 +252,7 @@ class ProviderClaimApproveView(ProviderClaimBase, GenericAPIView):
             serializer.validated_data["approved_amount"],
             serializer.validated_data.get("note", ""),
         )
+        notifications.notify_claim_status(claim, "APPROVED")
         return Response(ClaimSerializer(claim).data, status=status.HTTP_200_OK)
 
 
@@ -264,6 +272,7 @@ class ProviderClaimRejectView(ProviderClaimBase, GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         claim.reject(serializer.validated_data["note"])
+        notifications.notify_claim_status(claim, "REJECTED")
         return Response(ClaimSerializer(claim).data, status=status.HTTP_200_OK)
 
 
@@ -333,4 +342,5 @@ class ProviderClaimPayoutConfirmView(ProviderClaimBase, GenericAPIView):
             # Simulated confirmation → payout SUCCESS → claim SETTLED.
             payout.mark_success(f"SIMPAYOUT-{payout.id}")
         fresh = get_object_or_404(self.get_queryset(), pk=pk)
+        notifications.notify_claim_status(fresh, "SETTLED")
         return Response(ClaimSerializer(fresh).data, status=status.HTTP_200_OK)

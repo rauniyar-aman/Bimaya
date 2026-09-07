@@ -108,3 +108,15 @@ class CustomerKyc(TimeStampedModel):
     @property
     def is_verified(self):
         return self.status == self.Status.VERIFIED
+
+    def mark_verified(self, note=""):
+        """Approve this KYC. Clears any prior rejection note."""
+        self.status = self.Status.VERIFIED
+        self.review_note = note
+        self.save(update_fields=["status", "review_note", "updated_at"])
+
+    def mark_rejected(self, note):
+        """Reject this KYC, recording why (shown back to the customer)."""
+        self.status = self.Status.REJECTED
+        self.review_note = note
+        self.save(update_fields=["status", "review_note", "updated_at"])

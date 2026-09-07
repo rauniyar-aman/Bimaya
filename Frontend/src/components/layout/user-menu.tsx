@@ -14,11 +14,15 @@ function menuLinksFor(user: AuthUser) {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/dashboard/policies", label: "My policies" },
     { href: "/dashboard/claims", label: "My claims" },
+    { href: "/dashboard/notifications", label: "Notifications" },
     { href: "/dashboard/kyc", label: "KYC verification" },
     { href: "/dashboard/profile", label: "Profile settings" },
   ];
   if (user.role === "PROVIDER") {
     links.splice(1, 0, { href: "/provider", label: "Provider area" });
+  }
+  if (user.role === "ADMIN") {
+    links.splice(1, 0, { href: "/admin", label: "Admin panel" });
   }
   return links;
 }
