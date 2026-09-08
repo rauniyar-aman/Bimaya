@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from .access import role_for
 from .models import Provider
 
 
@@ -23,8 +24,12 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
     """The provider's own editable profile (``/provider/profile/``).
 
     ``kyc_status`` and ``is_approved`` are decided by administrators and are
-    therefore read-only here — a provider cannot approve itself.
+    therefore read-only here — a provider cannot approve itself. ``my_role`` is
+    the acting user's role in this organisation (``OWNER``/``STAFF``/``VIEWER``),
+    so the frontend can hide or disable actions their role does not allow.
     """
+
+    my_role = serializers.SerializerMethodField()
 
     class Meta:
         model = Provider
@@ -40,6 +45,7 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
             "support_phone",
             "kyc_status",
             "is_approved",
+            "my_role",
             "created_at",
             "updated_at",
         )
@@ -48,6 +54,12 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
             "slug",
             "kyc_status",
             "is_approved",
+            "my_role",
             "created_at",
             "updated_at",
         )
+
+    def get_my_role(self, obj) -> str | None:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        return role_for(user, obj)

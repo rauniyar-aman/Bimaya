@@ -18,8 +18,7 @@ from rest_framework.generics import (
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from apps.core.permissions import IsOwnerOrPlatformAdmin, IsProvider, IsVerified
-from apps.providers.models import Provider
+from apps.providers.access import IsProviderTeamMember, provider_for
 
 from .exceptions import (
     PolicyNotDeactivatable,
@@ -130,19 +129,22 @@ class PolicyCompareView(ListAPIView):
 
 
 class ProviderPolicyBase:
-    """Shared helpers for the provider's own-policy endpoints."""
+    """Shared helpers for the provider's own-policy endpoints.
 
-    permission_classes = [IsProvider, IsVerified]
+    Resolves the acting user's provider organisation via
+    :func:`~apps.providers.access.provider_for`, so an owner and their staff /
+    viewers all work the same book of policies. Writes are gated by role in
+    :class:`~apps.providers.access.IsProviderTeamMember` (viewers are read-only).
+    """
+
+    permission_classes = [IsProviderTeamMember]
     serializer_class = ProviderPolicyWriteSerializer
 
-    def provider_profile(self):
-        try:
-            return self.request.user.provider_profile
-        except Provider.DoesNotExist:
-            return None
+    def get_provider(self):
+        return provider_for(self.request.user)
 
     def get_queryset(self):
-        provider = self.provider_profile()
+        provider = self.get_provider()
         if provider is None:
             return Policy.objects.none()
         return Policy.objects.filter(provider=provider).select_related(
@@ -155,7 +157,7 @@ class ProviderPolicyListCreateView(ProviderPolicyBase, ListCreateAPIView):
     filter_backends = []
 
     def perform_create(self, serializer):
-        provider = self.provider_profile()
+        provider = self.get_provider()
         if provider is None:
             raise ProviderProfileRequired()
         serializer.save(provider=provider, status=Policy.Status.DRAFT)
@@ -163,9 +165,6 @@ class ProviderPolicyListCreateView(ProviderPolicyBase, ListCreateAPIView):
 
 @extend_schema(tags=PROVIDER_TAG, summary="Retrieve, update or delete an own policy")
 class ProviderPolicyDetailView(ProviderPolicyBase, RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsProvider, IsVerified, IsOwnerOrPlatformAdmin]
-    owner_field = "provider.user"
-
     def perform_update(self, serializer):
         was_approved = serializer.instance.status == Policy.Status.APPROVED
         policy = serializer.save()
@@ -182,12 +181,8 @@ class ProviderPolicyDetailView(ProviderPolicyBase, RetrieveUpdateDestroyAPIView)
     responses=ProviderPolicyWriteSerializer,
 )
 class ProviderPolicySubmitView(ProviderPolicyBase, GenericAPIView):
-    permission_classes = [IsProvider, IsVerified, IsOwnerOrPlatformAdmin]
-    owner_field = "provider.user"
-
     def post(self, request, pk):
         policy = get_object_or_404(self.get_queryset(), pk=pk)
-        self.check_object_permissions(request, policy)
         if policy.status not in (Policy.Status.DRAFT, Policy.Status.INACTIVE):
             raise PolicyNotSubmittable()
         policy.status = Policy.Status.PENDING
@@ -208,12 +203,8 @@ class ProviderPolicyDeactivateView(ProviderPolicyBase, GenericAPIView):
     submitted for review again), so there is no separate relist action here.
     """
 
-    permission_classes = [IsProvider, IsVerified, IsOwnerOrPlatformAdmin]
-    owner_field = "provider.user"
-
     def post(self, request, pk):
         policy = get_object_or_404(self.get_queryset(), pk=pk)
-        self.check_object_permissions(request, policy)
         if policy.status != Policy.Status.APPROVED:
             raise PolicyNotDeactivatable()
         policy.deactivate()

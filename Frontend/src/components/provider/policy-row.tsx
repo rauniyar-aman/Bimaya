@@ -12,10 +12,12 @@ import { formatFrequency, formatNpr, formatTerm } from "@/lib/format";
 
 export function PolicyRow({
   policy,
+  canWrite = true,
   onSubmitted,
   onDeleted,
 }: {
   policy: ProviderPolicy;
+  canWrite?: boolean;
   onSubmitted: (updated: ProviderPolicy) => void;
   onDeleted: (id: number) => void;
 }) {
@@ -85,43 +87,45 @@ export function PolicyRow({
           </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <Link
-            href={`/provider/policies/${policy.id}/edit`}
-            className={buttonVariants({ variant: "secondary", size: "sm" })}
-          >
-            Edit
-          </Link>
-          {canSubmit && (
-            <Button
-              size="sm"
-              onClick={handleSubmit}
-              loading={busy === "submit"}
-              disabled={busy !== null}
+        {canWrite && (
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href={`/provider/policies/${policy.id}/edit`}
+              className={buttonVariants({ variant: "secondary", size: "sm" })}
             >
-              Submit for review
-            </Button>
-          )}
-          {policy.status === "APPROVED" && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleDeactivate}
-              loading={busy === "deactivate"}
+              Edit
+            </Link>
+            {canSubmit && (
+              <Button
+                size="sm"
+                onClick={handleSubmit}
+                loading={busy === "submit"}
+                disabled={busy !== null}
+              >
+                Submit for review
+              </Button>
+            )}
+            {policy.status === "APPROVED" && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleDeactivate}
+                loading={busy === "deactivate"}
+                disabled={busy !== null}
+              >
+                Deactivate
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={handleDelete}
               disabled={busy !== null}
+              className="rounded-lg px-2.5 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
             >
-              Deactivate
-            </Button>
-          )}
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={busy !== null}
-            className="rounded-lg px-2.5 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
-          >
-            {busy === "delete" ? "Deleting…" : "Delete"}
-          </button>
-        </div>
+              {busy === "delete" ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        )}
       </div>
 
       <p className="mt-2 text-xs text-muted">{meta.hint}</p>

@@ -29,10 +29,10 @@ from rest_framework.response import Response
 from apps.core.permissions import (
     IsCustomer,
     IsOwnerOrPlatformAdmin,
-    IsProvider,
     IsVerified,
 )
 from apps.notifications import services as notifications
+from apps.providers.access import IsProviderTeamMember, provider_for
 
 from .exceptions import (
     ClaimNotDecidable,
@@ -176,9 +176,13 @@ class ClaimDocumentDownloadView(GenericAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return Claim.objects.filter(
-            Q(customer=user) | Q(purchase__policy__provider__user=user)
-        )
+        visible = Q(customer=user)
+        provider = provider_for(user)
+        if provider is not None:
+            # Owners and their staff / viewers may download the supporting
+            # documents for claims on their organisation's policies.
+            visible |= Q(purchase__policy__provider=provider)
+        return Claim.objects.filter(visible)
 
     def get(self, request, pk, doc_pk):
         claim = get_object_or_404(self.get_queryset(), pk=pk)
@@ -192,19 +196,21 @@ class ClaimDocumentDownloadView(GenericAPIView):
 class ProviderClaimBase:
     """Shared configuration for a provider working their claims queue.
 
-    Scoped to claims against the signed-in provider's own policies — never
-    another provider's — so ownership is enforced by the queryset itself.
+    Scoped to claims against the acting user's provider organisation — never
+    another provider's — so ownership is enforced by the queryset itself. An
+    owner and their staff / viewers share the queue; the decision actions are
+    gated by role in :class:`~apps.providers.access.IsProviderTeamMember`.
     """
 
-    permission_classes = [IsProvider, IsVerified]
+    permission_classes = [IsProviderTeamMember]
     serializer_class = ClaimSerializer
     filterset_fields = ["status"]
 
-    def provider_profile(self):
-        return getattr(self.request.user, "provider_profile", None)
+    def get_provider(self):
+        return provider_for(self.request.user)
 
     def get_queryset(self):
-        provider = self.provider_profile()
+        provider = self.get_provider()
         if provider is None:
             return Claim.objects.none()
         return (

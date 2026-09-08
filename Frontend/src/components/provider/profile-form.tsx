@@ -87,6 +87,9 @@ function ProfileFields({ profile }: { profile: ProviderProfile | null }) {
   const { authFetch } = useAuth();
   const router = useRouter();
   const isCreate = profile === null;
+  // Only the organisation owner may edit the company profile; staff and viewers
+  // see it read-only (the backend enforces the same rule).
+  const canEdit = isCreate || profile.my_role === "OWNER";
 
   const [companyName, setCompanyName] = useState(profile?.company_name ?? "");
   const [registrationNumber, setRegistrationNumber] = useState(
@@ -158,6 +161,12 @@ function ProfileFields({ profile }: { profile: ProviderProfile | null }) {
       </CardHeader>
 
       <CardContent>
+        {!canEdit && (
+          <Alert variant="info" className="mb-5">
+            Only the organisation owner can edit the company profile. These
+            details are shown to you read-only.
+          </Alert>
+        )}
         {saved && (
           <Alert variant="success" className="mb-5">
             Your profile has been saved.
@@ -170,6 +179,7 @@ function ProfileFields({ profile }: { profile: ProviderProfile | null }) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          <fieldset disabled={!canEdit} className="space-y-4 border-0 p-0 disabled:opacity-70">
           <Field
             label="Company name"
             htmlFor="company_name"
@@ -266,10 +276,13 @@ function ProfileFields({ profile }: { profile: ProviderProfile | null }) {
               aria-invalid={Boolean(errors.support_phone)}
             />
           </Field>
+          </fieldset>
 
-          <Button type="submit" loading={pending}>
-            {isCreate ? "Create profile" : "Save changes"}
-          </Button>
+          {canEdit && (
+            <Button type="submit" loading={pending}>
+              {isCreate ? "Create profile" : "Save changes"}
+            </Button>
+          )}
         </form>
       </CardContent>
     </Card>

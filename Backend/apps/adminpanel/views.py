@@ -8,6 +8,7 @@ and dispatch notifications through :mod:`apps.notifications.services`.
 """
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Count, Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
@@ -22,7 +23,7 @@ from apps.documents.models import CustomerKyc
 from apps.documents.serializers import CustomerKycSerializer
 from apps.notifications import services as notifications
 from apps.policies.models import Policy
-from apps.providers.models import Provider
+from apps.providers.models import Provider, ProviderMembership, ProviderRole
 from apps.purchases.models import PolicyPurchase
 
 from .analytics import build_admin_analytics
@@ -39,6 +40,9 @@ from .serializers import (
     AdminPurchaseSerializer,
     AdminUserDetailSerializer,
     AdminUserSerializer,
+    ProviderMemberCreateSerializer,
+    ProviderMemberRoleSerializer,
+    ProviderMemberSerializer,
     RejectNoteSerializer,
 )
 
@@ -146,6 +150,150 @@ class AdminProviderRevokeView(AdminBase, GenericAPIView):
         return Response(
             AdminProviderApproveView._serialize(provider), status=status.HTTP_200_OK
         )
+
+
+# --- Provider team members --------------------------------------------------
+
+
+class AdminProviderMemberBase(AdminBase):
+    """Shared helpers for managing a provider organisation's staff and viewers.
+
+    The organisation owner is ``Provider.user`` (role ``OWNER``) and is not a
+    membership row; everyone else is a
+    :class:`~apps.providers.models.ProviderMembership`. Memberships are always
+    resolved scoped to their provider, so an id from another organisation 404s.
+    """
+
+    def get_provider(self):
+        return get_object_or_404(
+            Provider.objects.select_related("user"), pk=self.kwargs["pk"]
+        )
+
+    def get_membership(self, provider):
+        return get_object_or_404(
+            provider.memberships.select_related("user"),
+            pk=self.kwargs["membership_pk"],
+        )
+
+    @staticmethod
+    def _membership_row(membership):
+        user = membership.user
+        return {
+            "user_id": user.id,
+            "membership_id": membership.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": membership.role,
+            "is_active": user.is_active,
+            "date_joined": user.date_joined,
+        }
+
+    def _member_rows(self, provider):
+        owner = provider.user
+        rows = [
+            {
+                "user_id": owner.id,
+                "membership_id": None,
+                "email": owner.email,
+                "full_name": owner.full_name,
+                "role": ProviderRole.OWNER.value,
+                "is_active": owner.is_active,
+                "date_joined": owner.date_joined,
+            }
+        ]
+        rows.extend(
+            self._membership_row(membership)
+            for membership in provider.memberships.select_related("user").all()
+        )
+        return rows
+
+
+class AdminProviderMemberListCreateView(AdminProviderMemberBase, GenericAPIView):
+    """List a provider organisation's team, or add a staff/viewer to it."""
+
+    serializer_class = ProviderMemberCreateSerializer
+
+    @extend_schema(
+        tags=ADMIN_TAG,
+        summary="List a provider's team members",
+        responses=ProviderMemberSerializer(many=True),
+    )
+    def get(self, request, pk):
+        provider = self.get_provider()
+        rows = self._member_rows(provider)
+        return Response(ProviderMemberSerializer(rows, many=True).data)
+
+    @extend_schema(
+        tags=ADMIN_TAG,
+        summary="Add a staff/viewer to a provider",
+        request=ProviderMemberCreateSerializer,
+        responses=ProviderMemberSerializer,
+    )
+    def post(self, request, pk):
+        provider = self.get_provider()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        with transaction.atomic():
+            user = User.objects.create_user(
+                email=data["email"],
+                password=data["password"],
+                full_name=data["full_name"],
+                role=User.Role.PROVIDER,
+                is_verified=True,
+            )
+            membership = ProviderMembership.objects.create(
+                provider=provider, user=user, role=data["role"]
+            )
+        return Response(
+            ProviderMemberSerializer(self._membership_row(membership)).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AdminProviderMemberDetailView(AdminProviderMemberBase, GenericAPIView):
+    """Change a member's role, or remove them from the organisation."""
+
+    serializer_class = ProviderMemberRoleSerializer
+
+    @extend_schema(
+        tags=ADMIN_TAG,
+        summary="Change a member's role",
+        request=ProviderMemberRoleSerializer,
+        responses=ProviderMemberSerializer,
+    )
+    def patch(self, request, pk, membership_pk):
+        provider = self.get_provider()
+        membership = self.get_membership(provider)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_role = serializer.validated_data["role"]
+        if membership.role != new_role:
+            membership.role = new_role
+            membership.save(update_fields=["role", "updated_at"])
+        return Response(
+            ProviderMemberSerializer(self._membership_row(membership)).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        tags=ADMIN_TAG,
+        summary="Remove a member from the organisation",
+        request=None,
+        responses={204: None},
+    )
+    def delete(self, request, pk, membership_pk):
+        provider = self.get_provider()
+        membership = self.get_membership(provider)
+        user = membership.user
+        membership.delete()
+        # The account existed only to staff this organisation; deactivate it so
+        # it can no longer sign in. It is not deleted, which preserves the rows
+        # it authored (e.g. claim-thread messages).
+        if user.is_active:
+            user.is_active = False
+            user.save(update_fields=["is_active"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # --- KYC --------------------------------------------------------------------

@@ -60,3 +60,50 @@ class Provider(TimeStampedModel):
             slug = f"{base}-{suffix}"
             suffix += 1
         return slug
+
+
+class ProviderRole(models.TextChoices):
+    """A person's role within a provider organisation.
+
+    ``OWNER`` is the account the provider profile is bound to
+    (``Provider.user``) and is not stored as a membership row. ``STAFF`` and
+    ``VIEWER`` are extra people, added by a platform admin and recorded as
+    :class:`ProviderMembership`.
+    """
+
+    OWNER = "OWNER", "Owner"
+    STAFF = "STAFF", "Staff"
+    VIEWER = "VIEWER", "Viewer"
+
+
+class ProviderMembership(TimeStampedModel):
+    """Links an extra staff or viewer user to a provider organisation.
+
+    The organisation's owner is ``Provider.user``; this model holds everyone
+    else. A user belongs to at most one provider (``user`` is one-to-one), and
+    membership is managed by platform admins — never self-service.
+    """
+
+    provider = models.ForeignKey(
+        Provider, on_delete=models.CASCADE, related_name="memberships"
+    )
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="provider_membership",
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=[
+            (ProviderRole.STAFF, ProviderRole.STAFF.label),
+            (ProviderRole.VIEWER, ProviderRole.VIEWER.label),
+        ],
+        default=ProviderRole.STAFF,
+        help_text="Owners are not stored here; the owner is Provider.user.",
+    )
+
+    class Meta(TimeStampedModel.Meta):
+        ordering = ["user__email"]
+
+    def __str__(self):
+        return f"{self.user} — {self.provider} ({self.get_role_display()})"

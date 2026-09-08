@@ -21,6 +21,7 @@ import {
   type KycStatus,
   type ProviderPolicy,
   type ProviderProfile,
+  type ProviderRole,
 } from "@/lib/api";
 
 const KYC_LABEL: Record<
@@ -107,14 +108,21 @@ export function ProviderDashboard() {
         </Alert>
       )}
 
-      {state.phase === "ready" && (
+      {state.phase === "ready" && (() => {
+        // Viewers get a read-only dashboard; owners and staff can act. A fresh
+        // owner with no profile yet has no role, but is treated as a writer so
+        // they can create one.
+        const canWrite = state.profile?.my_role !== "VIEWER";
+        return (
         <div className="mt-8 space-y-8">
+          <ViewerNotice role={state.profile?.my_role ?? null} />
           <ProfileSection profile={state.profile} />
 
           {state.profile && (
             <PoliciesSection
               approved={state.profile.is_approved}
               policies={state.policies}
+              canWrite={canWrite}
               onSubmitted={handleSubmitted}
               onDeleted={handleDeleted}
             />
@@ -123,14 +131,25 @@ export function ProviderDashboard() {
           {state.profile?.is_approved && (
             <>
               <ProviderAnalyticsSection />
-              <IssuanceQueue />
-              <ClaimReviewQueue />
+              <IssuanceQueue canWrite={canWrite} />
+              <ClaimReviewQueue canWrite={canWrite} />
               <ProviderSales />
             </>
           )}
         </div>
-      )}
+        );
+      })()}
     </Container>
+  );
+}
+
+function ViewerNotice({ role }: { role: ProviderRole | null }) {
+  if (role !== "VIEWER") return null;
+  return (
+    <Alert variant="info">
+      You have view-only access to this organisation. You can review policies,
+      sales, and claims, but only owners and staff can make changes.
+    </Alert>
   );
 }
 
@@ -199,11 +218,13 @@ function ProfileSection({ profile }: { profile: ProviderProfile | null }) {
 function PoliciesSection({
   approved,
   policies,
+  canWrite,
   onSubmitted,
   onDeleted,
 }: {
   approved: boolean;
   policies: ProviderPolicy[];
+  canWrite: boolean;
   onSubmitted: (updated: ProviderPolicy) => void;
   onDeleted: (id: number) => void;
 }) {
@@ -213,13 +234,15 @@ function PoliciesSection({
         <h2 className="font-display text-xl font-semibold text-ink">
           Your policies
         </h2>
-        <Link
-          href="/provider/policies/new"
-          className={buttonVariants({ variant: "cta", size: "sm" })}
-        >
-          <PlusIcon className="h-4 w-4" />
-          Add policy
-        </Link>
+        {canWrite && (
+          <Link
+            href="/provider/policies/new"
+            className={buttonVariants({ variant: "cta", size: "sm" })}
+          >
+            <PlusIcon className="h-4 w-4" />
+            Add policy
+          </Link>
+        )}
       </div>
 
       {!approved && (
@@ -235,18 +258,22 @@ function PoliciesSection({
             No policies yet
           </h3>
           <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
-            Create your first plan and submit it for review to reach customers.
+            {canWrite
+              ? "Create your first plan and submit it for review to reach customers."
+              : "This organisation has not listed any policies yet."}
           </p>
-          <Link
-            href="/provider/policies/new"
-            className={buttonVariants({
-              variant: "cta",
-              size: "md",
-              className: "mt-5",
-            })}
-          >
-            Create a policy
-          </Link>
+          {canWrite && (
+            <Link
+              href="/provider/policies/new"
+              className={buttonVariants({
+                variant: "cta",
+                size: "md",
+                className: "mt-5",
+              })}
+            >
+              Create a policy
+            </Link>
+          )}
         </div>
       ) : (
         <div className="mt-4 space-y-3">
@@ -254,6 +281,7 @@ function PoliciesSection({
             <PolicyRow
               key={policy.id}
               policy={policy}
+              canWrite={canWrite}
               onSubmitted={onSubmitted}
               onDeleted={onDeleted}
             />

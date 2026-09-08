@@ -6,11 +6,10 @@ from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 
-from apps.core.permissions import IsProvider, IsVerified
-
+from .access import IsProviderTeamMember, provider_for
 from .analytics import build_provider_analytics
 from .exceptions import ProviderProfileNotFound
-from .models import Provider
+from .models import ProviderRole
 from .serializers import ProviderProfileSerializer
 
 PROVIDER_TAG = ["provider"]
@@ -18,19 +17,23 @@ PROVIDER_TAG = ["provider"]
 
 @extend_schema(tags=PROVIDER_TAG, summary="Own provider profile")
 class ProviderProfileView(GenericAPIView):
-    """Retrieve or upsert the signed-in provider's company profile.
+    """Retrieve or upsert the acting user's provider company profile.
 
-    ``GET`` returns the profile, or 404 (``provider_profile_missing``) when the
-    provider has not created one yet — the frontend uses that to show the setup
-    form. ``PUT``/``PATCH`` creates the profile on first save and updates it
-    thereafter; the owning user always comes from the request.
+    ``GET`` returns the organisation's profile to any of its members (owner,
+    staff or viewer), or 404 (``provider_profile_missing``) when the owner has
+    not created one yet — the frontend uses that to show the setup form.
+    ``PUT``/``PATCH`` is owner-only: it creates the profile on first save and
+    updates it thereafter, with the owning user taken from the request.
     """
 
     serializer_class = ProviderProfileSerializer
-    permission_classes = [IsProvider, IsVerified]
+    permission_classes = [IsProviderTeamMember]
+    # Only the organisation owner may create or edit the company profile; staff
+    # and viewers can read it but not change it.
+    write_roles = (ProviderRole.OWNER,)
 
     def get_object(self):
-        return Provider.objects.filter(user=self.request.user).first()
+        return provider_for(self.request.user)
 
     def get(self, request):
         provider = self.get_object()
@@ -71,10 +74,10 @@ class ProviderAnalyticsView(GenericAPIView):
     provider has not created a profile yet, mirroring the profile endpoint.
     """
 
-    permission_classes = [IsProvider, IsVerified]
+    permission_classes = [IsProviderTeamMember]
 
     def get(self, request):
-        provider = Provider.objects.filter(user=request.user).first()
+        provider = provider_for(request.user)
         if provider is None:
             raise ProviderProfileNotFound()
         return Response(build_provider_analytics(provider))

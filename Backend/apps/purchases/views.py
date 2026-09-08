@@ -18,10 +18,10 @@ from rest_framework.response import Response
 from apps.core.permissions import (
     IsCustomer,
     IsOwnerOrPlatformAdmin,
-    IsProvider,
     IsVerified,
 )
 from apps.notifications import services as notifications
+from apps.providers.access import IsProviderTeamMember, provider_for
 from apps.payments.models import Payment
 
 from . import pdf
@@ -167,18 +167,20 @@ class PurchaseReceiptView(PurchaseDocumentBase):
 class ProviderIssuanceBase:
     """Shared helpers for a provider working their issuance queue.
 
-    Scoped to purchases of the signed-in provider's own policies — never any
-    other provider's — so ownership is enforced by the queryset itself.
+    Scoped to purchases of the acting user's provider organisation — never any
+    other provider's — so ownership is enforced by the queryset itself. An owner
+    and their staff / viewers share the queue; issuing is gated by role in
+    :class:`~apps.providers.access.IsProviderTeamMember`.
     """
 
-    permission_classes = [IsProvider, IsVerified]
+    permission_classes = [IsProviderTeamMember]
     serializer_class = PolicyPurchaseSerializer
 
-    def provider_profile(self):
-        return getattr(self.request.user, "provider_profile", None)
+    def get_provider(self):
+        return provider_for(self.request.user)
 
     def get_queryset(self):
-        provider = self.provider_profile()
+        provider = self.get_provider()
         if provider is None:
             return PolicyPurchase.objects.none()
         return PolicyPurchase.objects.filter(

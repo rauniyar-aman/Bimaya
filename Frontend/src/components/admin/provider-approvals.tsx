@@ -5,6 +5,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { PROVIDER_FILTERS } from "@/components/admin/filters";
 import { KYC_STATUS_META } from "@/components/admin/status-meta";
 import { ExportButton } from "@/components/admin/export-button";
+import { ProviderMembersModal } from "@/components/admin/provider-members";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,8 @@ export function ProviderApprovals() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [working, setWorking] = useState(false);
   const [actionError, setActionError] = useState("");
+
+  const [members, setMembers] = useState<AdminProvider | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,29 +196,38 @@ export function ProviderApprovals() {
                       </StatusPill>
                     </TD>
                     <TD className="text-right">
-                      {provider.is_approved ? (
+                      <div className="flex justify-end gap-2">
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => {
-                            setActionError("");
-                            setPending({ provider, action: "revoke" });
-                          }}
+                          onClick={() => setMembers(provider)}
                         >
-                          Revoke
+                          Team
                         </Button>
-                      ) : (
-                        <Button
-                          variant="success"
-                          size="sm"
-                          onClick={() => {
-                            setActionError("");
-                            setPending({ provider, action: "approve" });
-                          }}
-                        >
-                          Approve
-                        </Button>
-                      )}
+                        {provider.is_approved ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setActionError("");
+                              setPending({ provider, action: "revoke" });
+                            }}
+                          >
+                            Revoke
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="success"
+                            size="sm"
+                            onClick={() => {
+                              setActionError("");
+                              setPending({ provider, action: "approve" });
+                            }}
+                          >
+                            Approve
+                          </Button>
+                        )}
+                      </div>
                     </TD>
                   </TR>
                 );
@@ -273,6 +285,14 @@ export function ProviderApprovals() {
           </div>
         )}
       </Modal>
+
+      {members && (
+        <ProviderMembersModal
+          provider={members}
+          open={members !== null}
+          onClose={() => setMembers(null)}
+        />
+      )}
     </div>
   );
 }

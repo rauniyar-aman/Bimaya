@@ -264,6 +264,9 @@ export interface PolicyListParams {
 
 /* Provider-facing shapes (own profile + own policies). */
 
+/** A member's role within a provider organisation. */
+export type ProviderRole = "OWNER" | "STAFF" | "VIEWER";
+
 export interface ProviderProfile {
   id: number;
   company_name: string;
@@ -276,6 +279,8 @@ export interface ProviderProfile {
   support_phone: string;
   kyc_status: KycStatus;
   is_approved: boolean;
+  /** The signed-in user's role here — drives which write actions the UI shows. */
+  my_role: ProviderRole | null;
   created_at: string;
   updated_at: string;
 }
@@ -663,6 +668,26 @@ export interface AdminProviderListParams {
   kyc_status?: KycStatus;
   search?: string;
   page?: number;
+}
+
+/** One person in a provider organisation: the owner or an added staff/viewer. */
+export interface ProviderMember {
+  user_id: number;
+  /** Null for the owner (who is `Provider.user`, not a membership row). */
+  membership_id: number | null;
+  email: string;
+  full_name: string;
+  role: ProviderRole;
+  is_active: boolean;
+  date_joined: string;
+}
+
+/** Admin input to add a staff/viewer to a provider organisation. */
+export interface ProviderMemberInput {
+  email: string;
+  full_name?: string;
+  password: string;
+  role: "STAFF" | "VIEWER";
 }
 
 export interface AdminKycListParams {
@@ -1160,6 +1185,40 @@ export const api = {
     revokeProvider: (authFetch: AuthFetch, id: number) =>
       authFetch<AdminProvider>(`/admin/providers/${id}/revoke/`, {
         method: "POST",
+      }),
+
+    /* Provider team members — the owner (read-only here) plus added staff/viewers */
+    listProviderMembers: (authFetch: AuthFetch, providerId: number) =>
+      authFetch<ProviderMember[]>(`/admin/providers/${providerId}/members/`),
+
+    addProviderMember: (
+      authFetch: AuthFetch,
+      providerId: number,
+      payload: ProviderMemberInput,
+    ) =>
+      authFetch<ProviderMember>(`/admin/providers/${providerId}/members/`, {
+        method: "POST",
+        json: payload,
+      }),
+
+    updateProviderMemberRole: (
+      authFetch: AuthFetch,
+      providerId: number,
+      membershipId: number,
+      role: "STAFF" | "VIEWER",
+    ) =>
+      authFetch<ProviderMember>(
+        `/admin/providers/${providerId}/members/${membershipId}/`,
+        { method: "PATCH", json: { role } },
+      ),
+
+    removeProviderMember: (
+      authFetch: AuthFetch,
+      providerId: number,
+      membershipId: number,
+    ) =>
+      authFetch<void>(`/admin/providers/${providerId}/members/${membershipId}/`, {
+        method: "DELETE",
       }),
 
     /* KYC */

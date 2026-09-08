@@ -29,7 +29,7 @@ from apps.documents.models import CustomerKyc
 from apps.notifications.models import Notification
 from apps.payments.models import Payment
 from apps.policies.models import InsuranceCategory, Policy
-from apps.providers.models import Provider
+from apps.providers.models import Provider, ProviderMembership, ProviderRole
 from apps.purchases.models import PolicyPurchase
 
 User = get_user_model()
@@ -203,6 +203,154 @@ class AdminProviderTests(APITestCase):
         self.assertFalse(response.data["is_approved"])
         self.provider.refresh_from_db()
         self.assertFalse(self.provider.is_approved)
+
+
+@no_throttle
+@override_settings(MEDIA_ROOT=_MEDIA_ROOT)
+class AdminProviderMemberTests(APITestCase):
+    """Admin manages a provider organisation's team (staff and viewers).
+
+    The owner (``Provider.user``) always appears in the list as role ``OWNER``
+    with a null membership id; staff/viewers are membership rows the admin can
+    add, re-role, and remove. Memberships are scoped to their provider.
+    """
+
+    def setUp(self):
+        self.admin = make_admin()
+        self.provider = make_provider(approved=True)
+        self.client.force_authenticate(self.admin)
+
+    def _members_url(self):
+        return reverse("admin-provider-members", args=[self.provider.id])
+
+    def _detail_url(self, membership_id):
+        return reverse(
+            "admin-provider-member-detail", args=[self.provider.id, membership_id]
+        )
+
+    def _add(self, email, role=ProviderRole.STAFF.value):
+        response = self.client.post(
+            self._members_url(),
+            {"email": email, "password": "Himalaya#2026", "role": role},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        return response.data["membership_id"]
+
+    def test_list_starts_with_only_the_owner(self):
+        response = self.client.get(self._members_url())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        owner = response.data[0]
+        self.assertEqual(owner["role"], ProviderRole.OWNER.value)
+        self.assertIsNone(owner["membership_id"])
+        self.assertEqual(owner["email"], self.provider.user.email)
+
+    def test_add_staff_creates_verified_provider_account(self):
+        response = self.client.post(
+            self._members_url(),
+            {
+                "email": "staff@bimaya.test",
+                "full_name": "Nabin Staff",
+                "password": "Himalaya#2026",
+                "role": ProviderRole.STAFF.value,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["role"], ProviderRole.STAFF.value)
+        self.assertIsNotNone(response.data["membership_id"])
+
+        user = User.objects.get(email="staff@bimaya.test")
+        self.assertEqual(user.role, User.Role.PROVIDER)
+        self.assertTrue(user.is_verified)
+        self.assertTrue(user.is_active)
+        membership = ProviderMembership.objects.get(user=user)
+        self.assertEqual(membership.provider, self.provider)
+        self.assertEqual(membership.role, ProviderRole.STAFF.value)
+
+    def test_add_rejects_duplicate_email(self):
+        response = self.client.post(
+            self._members_url(),
+            {
+                "email": self.provider.user.email,
+                "password": "Himalaya#2026",
+                "role": ProviderRole.VIEWER.value,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data["errors"])
+        self.assertFalse(
+            ProviderMembership.objects.filter(provider=self.provider).exists()
+        )
+
+    def test_add_rejects_owner_role(self):
+        response = self.client.post(
+            self._members_url(),
+            {
+                "email": "notowner@bimaya.test",
+                "password": "Himalaya#2026",
+                "role": ProviderRole.OWNER.value,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("role", response.data["errors"])
+
+    def test_list_includes_owner_and_added_members(self):
+        self._add("staff@bimaya.test", ProviderRole.STAFF.value)
+        response = self.client.get(self._members_url())
+        self.assertEqual(len(response.data), 2)
+        roles = {row["role"] for row in response.data}
+        self.assertEqual(roles, {ProviderRole.OWNER.value, ProviderRole.STAFF.value})
+
+    def test_change_role_staff_to_viewer(self):
+        membership_id = self._add("staff@bimaya.test", ProviderRole.STAFF.value)
+        response = self.client.patch(
+            self._detail_url(membership_id),
+            {"role": ProviderRole.VIEWER.value},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["role"], ProviderRole.VIEWER.value)
+        membership = ProviderMembership.objects.get(pk=membership_id)
+        self.assertEqual(membership.role, ProviderRole.VIEWER.value)
+
+    def test_remove_member_deletes_membership_and_deactivates_user(self):
+        membership_id = self._add("staff@bimaya.test", ProviderRole.STAFF.value)
+        user = ProviderMembership.objects.get(pk=membership_id).user
+        response = self.client.delete(self._detail_url(membership_id))
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(ProviderMembership.objects.filter(pk=membership_id).exists())
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
+
+    def test_member_from_another_provider_is_404(self):
+        other = make_provider("other@bimaya.test", "Other Co", approved=True)
+        other_membership = ProviderMembership.objects.create(
+            provider=other,
+            user=make_customer("om@bimaya.test"),
+            role=ProviderRole.STAFF.value,
+        )
+        response = self.client.patch(
+            self._detail_url(other_membership.id),
+            {"role": ProviderRole.VIEWER.value},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_requires_admin(self):
+        self.client.force_authenticate(self.provider.user)
+        self.assertEqual(
+            self.client.get(self._members_url()).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.client.force_authenticate(None)
+        self.assertEqual(
+            self.client.get(self._members_url()).status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
 
 
 @no_throttle

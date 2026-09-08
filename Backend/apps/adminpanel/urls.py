@@ -17,6 +17,8 @@ from .views import (
     AdminProviderApproveView,
     AdminProviderDetailView,
     AdminProviderListView,
+    AdminProviderMemberDetailView,
+    AdminProviderMemberListCreateView,
     AdminProviderReportView,
     AdminProviderRevokeView,
     AdminPurchaseForwardView,
@@ -46,6 +48,16 @@ urlpatterns = [
         "providers/<int:pk>/revoke/",
         AdminProviderRevokeView.as_view(),
         name="admin-provider-revoke",
+    ),
+    path(
+        "providers/<int:pk>/members/",
+        AdminProviderMemberListCreateView.as_view(),
+        name="admin-provider-members",
+    ),
+    path(
+        "providers/<int:pk>/members/<int:membership_pk>/",
+        AdminProviderMemberDetailView.as_view(),
+        name="admin-provider-member-detail",
     ),
     # KYC
     path("kyc/", AdminKycListView.as_view(), name="admin-kyc-list"),

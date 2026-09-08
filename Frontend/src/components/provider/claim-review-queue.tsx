@@ -35,7 +35,7 @@ type State =
  * simulated payout → settled). Rows update in place after each action so a claim
  * stays visible across its post-decision states.
  */
-export function ClaimReviewQueue() {
+export function ClaimReviewQueue({ canWrite = true }: { canWrite?: boolean }) {
   const { authFetch } = useAuth();
   const [state, setState] = useState<State>({ phase: "loading" });
 
@@ -103,6 +103,7 @@ export function ClaimReviewQueue() {
             <ClaimReviewRow
               key={claim.id}
               claim={claim}
+              canWrite={canWrite}
               onUpdated={handleUpdated}
             />
           ))}
@@ -114,9 +115,11 @@ export function ClaimReviewQueue() {
 
 function ClaimReviewRow({
   claim,
+  canWrite,
   onUpdated,
 }: {
   claim: Claim;
+  canWrite: boolean;
   onUpdated: (claim: Claim) => void;
 }) {
   const meta = CLAIM_STATUS_META[claim.status];
@@ -165,10 +168,15 @@ function ClaimReviewRow({
         <ClaimDocumentList claimId={claim.id} documents={claim.documents} />
       </div>
 
-      <ClaimActions claim={claim} onUpdated={onUpdated} />
+      {canWrite && <ClaimActions claim={claim} onUpdated={onUpdated} />}
 
       <div className="mt-4 border-t border-line pt-4">
-        <ClaimThread claim={claim} side="provider" onUpdated={onUpdated} />
+        <ClaimThread
+          claim={claim}
+          side="provider"
+          readOnly={!canWrite}
+          onUpdated={onUpdated}
+        />
       </div>
     </div>
   );

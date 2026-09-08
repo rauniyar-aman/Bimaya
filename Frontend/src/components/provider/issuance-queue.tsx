@@ -22,7 +22,7 @@ type State =
   | { phase: "ready"; items: ProviderIssuanceItem[] };
 
 /** The provider's "awaiting issuance" queue: forwarded purchases they must issue. */
-export function IssuanceQueue() {
+export function IssuanceQueue({ canWrite = true }: { canWrite?: boolean }) {
   const { authFetch } = useAuth();
   const [state, setState] = useState<State>({ phase: "loading" });
 
@@ -86,7 +86,12 @@ export function IssuanceQueue() {
       {state.phase === "ready" && state.items.length > 0 && (
         <div className="mt-4 space-y-3">
           {state.items.map((item) => (
-            <IssuanceRow key={item.id} item={item} onIssued={handleIssued} />
+            <IssuanceRow
+              key={item.id}
+              item={item}
+              canWrite={canWrite}
+              onIssued={handleIssued}
+            />
           ))}
         </div>
       )}
@@ -96,9 +101,11 @@ export function IssuanceQueue() {
 
 function IssuanceRow({
   item,
+  canWrite,
   onIssued,
 }: {
   item: ProviderIssuanceItem;
+  canWrite: boolean;
   onIssued: (id: number) => void;
 }) {
   const { authFetch } = useAuth();
@@ -162,34 +169,36 @@ function IssuanceRow({
         </div>
       </div>
 
-      <form
-        onSubmit={handleIssue}
-        className="mt-4 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-end"
-      >
-        <Field
-          label="Policy number"
-          htmlFor={`policy_number_${item.id}`}
-          error={errors.policy_number}
-          className="flex-1"
+      {canWrite && (
+        <form
+          onSubmit={handleIssue}
+          className="mt-4 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-end"
         >
-          <Input
-            id={`policy_number_${item.id}`}
-            value={policyNumber}
-            onChange={(e) => setPolicyNumber(e.target.value)}
-            placeholder="e.g. NLI-2026-000123"
-            disabled={issuing}
-            aria-invalid={Boolean(errors.policy_number)}
-          />
-        </Field>
-        <Button
-          type="submit"
-          loading={issuing}
-          disabled={!policyNumber.trim()}
-          className="sm:mb-0.5"
-        >
-          Issue policy
-        </Button>
-      </form>
+          <Field
+            label="Policy number"
+            htmlFor={`policy_number_${item.id}`}
+            error={errors.policy_number}
+            className="flex-1"
+          >
+            <Input
+              id={`policy_number_${item.id}`}
+              value={policyNumber}
+              onChange={(e) => setPolicyNumber(e.target.value)}
+              placeholder="e.g. NLI-2026-000123"
+              disabled={issuing}
+              aria-invalid={Boolean(errors.policy_number)}
+            />
+          </Field>
+          <Button
+            type="submit"
+            loading={issuing}
+            disabled={!policyNumber.trim()}
+            className="sm:mb-0.5"
+          >
+            Issue policy
+          </Button>
+        </form>
+      )}
 
       {formError && <p className="mt-2 text-sm text-red-600">{formError}</p>}
     </div>

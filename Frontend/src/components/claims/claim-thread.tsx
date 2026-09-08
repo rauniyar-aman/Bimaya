@@ -33,10 +33,13 @@ function authorLabel(role: UserRole, mine: boolean): string {
 export function ClaimThread({
   claim,
   side,
+  readOnly = false,
   onUpdated,
 }: {
   claim: Claim;
   side: Side;
+  /** When true, the thread is shown but the composer is hidden (e.g. viewers). */
+  readOnly?: boolean;
   onUpdated: (claim: Claim) => void;
 }) {
   const { authFetch } = useAuth();
@@ -71,9 +74,11 @@ export function ClaimThread({
     <div className="space-y-4">
       <div>
         <h2 className="font-display text-lg font-semibold text-ink">Messages</h2>
-        <p className="mt-1 text-sm text-muted">
-          Send a message to {otherLabel} about this claim.
-        </p>
+        {!readOnly && (
+          <p className="mt-1 text-sm text-muted">
+            Send a message to {otherLabel} about this claim.
+          </p>
+        )}
       </div>
 
       {claim.messages.length === 0 ? (
@@ -119,21 +124,23 @@ export function ClaimThread({
 
       {error && <Alert variant="error">{error}</Alert>}
 
-      <form onSubmit={handleSend} className="space-y-2">
-        <Textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={3}
-          placeholder="Write a message…"
-          disabled={sending}
-          aria-label="Message"
-        />
-        <div className="flex justify-end">
-          <Button type="submit" size="sm" loading={sending} disabled={!body.trim()}>
-            Send message
-          </Button>
-        </div>
-      </form>
+      {!readOnly && (
+        <form onSubmit={handleSend} className="space-y-2">
+          <Textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={3}
+            placeholder="Write a message…"
+            disabled={sending}
+            aria-label="Message"
+          />
+          <div className="flex justify-end">
+            <Button type="submit" size="sm" loading={sending} disabled={!body.trim()}>
+              Send message
+            </Button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
