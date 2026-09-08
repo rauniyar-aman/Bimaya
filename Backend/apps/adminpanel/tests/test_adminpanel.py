@@ -9,6 +9,7 @@ Uploads route to a throwaway ``MEDIA_ROOT`` so the repo's media folder is never
 touched; ``tearDownModule`` removes it.
 """
 
+import csv
 import io
 import shutil
 import tempfile
@@ -468,6 +469,88 @@ class AdminUserAndPolicyTests(APITestCase):
             reverse("admin-user-suspend", args=[self.provider.user.id])
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+@no_throttle
+@override_settings(MEDIA_ROOT=_MEDIA_ROOT)
+class AdminReportExportTests(APITestCase):
+    """CSV exports mirror each admin list (same filters + search), admin-only."""
+
+    def setUp(self):
+        self.admin = make_admin()
+        self.category = InsuranceCategory.objects.create(name="Vehicle")
+        self.provider = make_provider(approved=True)
+        self.policy = make_policy(self.provider, self.category)
+        self.customer = make_customer()
+
+    @staticmethod
+    def _rows(response):
+        return list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
+
+    def test_requires_admin(self):
+        url = reverse("admin-report-providers")
+        self.assertEqual(
+            self.client.get(url).status_code, status.HTTP_401_UNAUTHORIZED
+        )
+        self.client.force_authenticate(self.customer)
+        self.assertEqual(self.client.get(url).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_providers_report_is_a_named_csv_download(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(reverse("admin-report-providers"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "text/csv")
+        self.assertIn(
+            'attachment; filename="bimaya-providers-',
+            response["Content-Disposition"],
+        )
+        rows = self._rows(response)
+        self.assertEqual(rows[0][:2], ["ID", "Company"])
+        self.assertIn(self.provider.company_name, [r[1] for r in rows[1:]])
+
+    def test_providers_report_respects_filter(self):
+        make_provider("prov2@bimaya.test", "Pending Co", approved=False)
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(
+            reverse("admin-report-providers"), {"is_approved": "true"}
+        )
+        companies = {r[1] for r in self._rows(response)[1:]}
+        self.assertEqual(companies, {self.provider.company_name})
+
+    def test_providers_report_respects_search(self):
+        make_provider("prov2@bimaya.test", "Himalayan Health", approved=True)
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(
+            reverse("admin-report-providers"), {"search": "Himalayan"}
+        )
+        companies = {r[1] for r in self._rows(response)[1:]}
+        self.assertEqual(companies, {"Himalayan Health"})
+
+    def test_users_report_lists_users(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(reverse("admin-report-users"))
+        rows = self._rows(response)
+        self.assertEqual(rows[0][:2], ["ID", "Email"])
+        emails = {r[1] for r in rows[1:]}
+        self.assertIn(self.admin.email, emails)
+        self.assertIn(self.customer.email, emails)
+
+    def test_policies_report_has_rows(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(reverse("admin-report-policies"))
+        rows = self._rows(response)
+        self.assertEqual(rows[0][1], "Policy")
+        self.assertIn(self.policy.name, [r[1] for r in rows[1:]])
+
+    def test_purchases_report_reflects_a_purchase(self):
+        make_purchase(self.customer, self.policy)
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(reverse("admin-report-purchases"))
+        rows = self._rows(response)
+        self.assertEqual(rows[0][2], "Policy")
+        self.assertEqual(len(rows), 2)  # header + one purchase
+        self.assertEqual(rows[1][2], self.policy.name)
+        self.assertEqual(rows[1][5], self.customer.email)
 
 
 @no_throttle

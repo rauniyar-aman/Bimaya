@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { POLICY_FILTERS } from "@/components/admin/filters";
 import { POLICY_STATUS_META } from "@/components/admin/status-meta";
+import { ExportButton } from "@/components/admin/export-button";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -155,6 +156,15 @@ export function PoliciesTable() {
               </option>
             ))}
           </Select>
+          <ExportButton
+            filename="bimaya-policies.csv"
+            onExport={() =>
+              api.admin.exportPolicies(authFetch, {
+                status: (status || undefined) as PolicyStatus | undefined,
+                search: debouncedSearch || undefined,
+              })
+            }
+          />
         </div>
       </div>
 

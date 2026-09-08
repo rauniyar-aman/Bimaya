@@ -31,6 +31,7 @@ from .exceptions import (
     PurchaseNotForwardable,
     UserNotSuspendable,
 )
+from .reports import csv_response, local_date, money, yes_no
 from .serializers import (
     AdminKycSerializer,
     AdminPolicySerializer,
@@ -50,6 +51,28 @@ class AdminBase:
     """Shared configuration for every admin-panel endpoint."""
 
     permission_classes = [IsPlatformAdmin]
+
+
+class CsvExportMixin:
+    """Turn an admin list view into a full CSV download.
+
+    Reuses the list view's queryset, filters and search (through
+    ``filter_queryset``) so an export always matches what the table shows, but
+    skips pagination — a report covers every matching row. Subclasses set
+    ``report_basename`` and ``report_columns``, a list of ``(header, value)``
+    pairs where ``value`` is a callable taking the row object.
+    """
+
+    report_basename = "export"
+    report_columns = []
+
+    def get(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        header = [column[0] for column in self.report_columns]
+        rows = (
+            [value(obj) for _, value in self.report_columns] for obj in queryset
+        )
+        return csv_response(self.report_basename, header, rows)
 
 
 # --- Providers --------------------------------------------------------------
@@ -394,6 +417,90 @@ class AdminPolicyDeactivateView(AdminPolicyActionBase):
             raise PolicyNotActionable(str(error))
         notifications.notify_policy_deactivated(policy)
         return self._serialized(policy)
+
+
+# --- Reports (CSV export) ---------------------------------------------------
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Export providers as CSV",
+    responses={200: OpenApiTypes.BINARY},
+)
+class AdminProviderReportView(CsvExportMixin, AdminProviderListView):
+    report_basename = "bimaya-providers"
+    report_columns = [
+        ("ID", lambda p: p.id),
+        ("Company", lambda p: p.company_name),
+        ("Registration no.", lambda p: p.registration_number),
+        ("Owner name", lambda p: p.user.full_name),
+        ("Owner email", lambda p: p.user.email),
+        ("KYC status", lambda p: p.get_kyc_status_display()),
+        ("Approved", lambda p: yes_no(p.is_approved)),
+        ("Policies", lambda p: p.policy_count),
+        ("Joined", lambda p: local_date(p.created_at)),
+    ]
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Export users as CSV",
+    responses={200: OpenApiTypes.BINARY},
+)
+class AdminUserReportView(CsvExportMixin, AdminUserListView):
+    report_basename = "bimaya-users"
+    report_columns = [
+        ("ID", lambda u: u.id),
+        ("Email", lambda u: u.email),
+        ("Name", lambda u: u.full_name),
+        ("Phone", lambda u: u.phone),
+        ("Role", lambda u: u.get_role_display()),
+        ("Active", lambda u: yes_no(u.is_active)),
+        ("Verified", lambda u: yes_no(u.is_verified)),
+        ("Joined", lambda u: local_date(u.date_joined)),
+    ]
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Export policies as CSV",
+    responses={200: OpenApiTypes.BINARY},
+)
+class AdminPolicyReportView(CsvExportMixin, AdminPolicyListView):
+    report_basename = "bimaya-policies"
+    report_columns = [
+        ("ID", lambda p: p.id),
+        ("Policy", lambda p: p.name),
+        ("Provider", lambda p: p.provider.company_name),
+        ("Category", lambda p: p.category.name),
+        ("Premium (NPR)", lambda p: money(p.premium)),
+        ("Frequency", lambda p: p.get_premium_frequency_display()),
+        ("Coverage (NPR)", lambda p: money(p.coverage_amount)),
+        ("Status", lambda p: p.get_status_display()),
+        ("Created", lambda p: local_date(p.created_at)),
+    ]
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Export purchases as CSV",
+    responses={200: OpenApiTypes.BINARY},
+)
+class AdminPurchaseReportView(CsvExportMixin, AdminPurchaseListView):
+    report_basename = "bimaya-purchases"
+    report_columns = [
+        ("ID", lambda p: p.id),
+        ("Policy number", lambda p: p.policy_number or ""),
+        ("Policy", lambda p: p.policy.name),
+        ("Insurer", lambda p: p.policy.provider.company_name),
+        ("Customer", lambda p: p.customer.full_name),
+        ("Customer email", lambda p: p.customer.email),
+        ("Premium (NPR)", lambda p: money(p.policy.premium)),
+        ("Status", lambda p: p.get_status_display()),
+        ("Purchased", lambda p: local_date(p.created_at)),
+        ("Start", lambda p: local_date(p.start_date)),
+        ("End", lambda p: local_date(p.end_date)),
+    ]
 
 
 # --- Analytics --------------------------------------------------------------

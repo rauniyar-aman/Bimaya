@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ROLE_FILTERS } from "@/components/admin/filters";
 import { ROLE_META } from "@/components/admin/status-meta";
+import { ExportButton } from "@/components/admin/export-button";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -132,6 +133,15 @@ export function UsersTable() {
               </option>
             ))}
           </Select>
+          <ExportButton
+            filename="bimaya-users.csv"
+            onExport={() =>
+              api.admin.exportUsers(authFetch, {
+                role: (role || undefined) as UserRole | undefined,
+                search: debouncedSearch || undefined,
+              })
+            }
+          />
         </div>
       </div>
 

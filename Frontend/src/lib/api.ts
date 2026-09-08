@@ -1231,6 +1231,31 @@ export const api = {
     deactivatePolicy: (authFetch: AuthFetch, id: number) =>
       authFetch<AdminPolicy>(`/admin/policies/${id}/deactivate/`, { method: "POST" }),
 
+    /* Reports (CSV export) — same filters + search as each list, every row. */
+    exportProviders: (authFetch: AuthFetch, params: AdminProviderListParams = {}) =>
+      authFetch<Blob>(
+        `/admin/reports/providers/${toQuery(params as Record<string, unknown>)}`,
+        { blob: true },
+      ),
+
+    exportUsers: (authFetch: AuthFetch, params: AdminUserListParams = {}) =>
+      authFetch<Blob>(
+        `/admin/reports/users/${toQuery(params as Record<string, unknown>)}`,
+        { blob: true },
+      ),
+
+    exportPolicies: (authFetch: AuthFetch, params: AdminPolicyListParams = {}) =>
+      authFetch<Blob>(
+        `/admin/reports/policies/${toQuery(params as Record<string, unknown>)}`,
+        { blob: true },
+      ),
+
+    exportPurchases: (authFetch: AuthFetch, params: AdminPurchaseListParams = {}) =>
+      authFetch<Blob>(
+        `/admin/reports/purchases/${toQuery(params as Record<string, unknown>)}`,
+        { blob: true },
+      ),
+
     /* Analytics */
     analytics: (authFetch: AuthFetch) =>
       authFetch<AdminAnalytics>("/admin/analytics/"),

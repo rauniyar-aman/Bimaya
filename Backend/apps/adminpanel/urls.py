@@ -13,15 +13,19 @@ from .views import (
     AdminPolicyDeactivateView,
     AdminPolicyListView,
     AdminPolicyRejectView,
+    AdminPolicyReportView,
     AdminProviderApproveView,
     AdminProviderDetailView,
     AdminProviderListView,
+    AdminProviderReportView,
     AdminProviderRevokeView,
     AdminPurchaseForwardView,
     AdminPurchaseListView,
+    AdminPurchaseReportView,
     AdminUserDetailView,
     AdminUserListView,
     AdminUserReactivateView,
+    AdminUserReportView,
     AdminUserSuspendView,
 )
 
@@ -97,4 +101,25 @@ urlpatterns = [
     ),
     # Analytics
     path("analytics/", AdminAnalyticsView.as_view(), name="admin-analytics"),
+    # Reports (CSV export)
+    path(
+        "reports/providers/",
+        AdminProviderReportView.as_view(),
+        name="admin-report-providers",
+    ),
+    path(
+        "reports/users/",
+        AdminUserReportView.as_view(),
+        name="admin-report-users",
+    ),
+    path(
+        "reports/policies/",
+        AdminPolicyReportView.as_view(),
+        name="admin-report-policies",
+    ),
+    path(
+        "reports/purchases/",
+        AdminPurchaseReportView.as_view(),
+        name="admin-report-purchases",
+    ),
 ]

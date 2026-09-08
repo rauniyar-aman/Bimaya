@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { PROVIDER_FILTERS } from "@/components/admin/filters";
 import { KYC_STATUS_META } from "@/components/admin/status-meta";
+import { ExportButton } from "@/components/admin/export-button";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,6 +125,15 @@ export function ProviderApprovals() {
               </option>
             ))}
           </Select>
+          <ExportButton
+            filename="bimaya-providers.csv"
+            onExport={() =>
+              api.admin.exportProviders(authFetch, {
+                is_approved: approved === "" ? undefined : approved === "true",
+                search: debouncedSearch || undefined,
+              })
+            }
+          />
         </div>
       </div>
 

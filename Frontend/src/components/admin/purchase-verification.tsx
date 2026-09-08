@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { PURCHASE_FILTERS } from "@/components/admin/filters";
 import { KYC_STATUS_META, PURCHASE_STATUS_META } from "@/components/admin/status-meta";
+import { ExportButton } from "@/components/admin/export-button";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,6 +134,15 @@ export function PurchaseVerification() {
               </option>
             ))}
           </Select>
+          <ExportButton
+            filename="bimaya-purchases.csv"
+            onExport={() =>
+              api.admin.exportPurchases(authFetch, {
+                status: (statusFilter || undefined) as PurchaseStatus | undefined,
+                search: debouncedSearch || undefined,
+              })
+            }
+          />
         </div>
       </div>
 
