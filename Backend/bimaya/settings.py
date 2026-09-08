@@ -62,6 +62,7 @@ LOCAL_APPS = [
     "apps.leads",
     "apps.notifications",
     "apps.adminpanel",
+    "apps.assistant",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -155,6 +156,8 @@ REST_FRAMEWORK = {
         "user": "1000/day",
         "otp": "5/min",
         "login": "10/min",
+        "ai_chat": "15/min",
+        "ai_recommend": "30/min",
     },
 }
 
@@ -192,6 +195,19 @@ OTP_RETURN_IN_RESPONSE = env.bool("OTP_RETURN_IN_RESPONSE", default=DEBUG)
 # off by default and behind a pluggable adapter (apps/notifications/sms.py);
 # flip this on and wire a real gateway there to enable it.
 NOTIFICATIONS_SMS_ENABLED = env.bool("NOTIFICATIONS_SMS_ENABLED", default=False)
+
+# ---------------------------------------------------------------------------
+# AI chat assistant
+# ---------------------------------------------------------------------------
+# The recommendation engine is rule-based and always on. The free-form chat
+# assistant calls an external LLM, so it is off by default and only activates
+# once a key is configured (mirrors the SMS flag above). The provider is a seam
+# so it can be swapped without touching the app code. No customer PII is ever
+# sent to the provider — only the typed question and the public catalogue.
+AI_CHAT_ENABLED = env.bool("AI_CHAT_ENABLED", default=False)
+AI_CHAT_PROVIDER = env("AI_CHAT_PROVIDER", default="gemini")
+GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
+GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-flash-latest")
 
 # ---------------------------------------------------------------------------
 # CORS (locked to the frontend origin)

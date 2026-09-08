@@ -262,6 +262,35 @@ export interface PolicyListParams {
   page?: string | number;
 }
 
+/* AI advisor shapes (rule-based recommendations + flag-gated chat). */
+
+/** Optional criteria for the recommendation engine — all fields are optional. */
+export interface RecommendationInput {
+  category?: string;
+  budget_max?: string | number;
+  coverage_min?: string | number;
+  age?: string | number;
+  term_max?: string | number;
+  limit?: number;
+}
+
+/** A policy summary annotated with its rule-based match score and reasons. */
+export interface RecommendedPolicy extends PolicySummary {
+  match_score: number;
+  reasons: string[];
+}
+
+/** One turn of the client-side chat history sent back for context. */
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** The assistant's reply to a chat message. */
+export interface ChatReply {
+  reply: string;
+}
+
 /* Provider-facing shapes (own profile + own policies). */
 
 /** A member's role within a provider organisation. */
@@ -925,6 +954,26 @@ export const api = {
     compare: (ids: number[]) =>
       apiFetch<PolicyCompare[]>(`/policies/compare/?ids=${ids.join(",")}`, {
         cache: "no-store",
+      }),
+  },
+
+  /** AI advisor — public recommendations + authenticated flag-gated chat. */
+  assistant: {
+    /** Rule-based ranking of the public catalog — no token, no LLM. */
+    recommend: (payload: RecommendationInput = {}) =>
+      apiFetch<RecommendedPolicy[]>("/assistant/recommend/", {
+        method: "POST",
+        json: payload,
+      }),
+
+    /** Free-form insurance Q&A. Only answers when the flag + key are set. */
+    chat: (
+      authFetch: AuthFetch,
+      payload: { message: string; history?: ChatTurn[] },
+    ) =>
+      authFetch<ChatReply>("/assistant/chat/", {
+        method: "POST",
+        json: payload,
       }),
   },
 

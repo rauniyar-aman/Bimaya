@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: "/policies", label: "Policies" },
   { href: "/compare", label: "Compare" },
   { href: "/categories", label: "Categories" },
+  { href: "/assistant", label: "AI advisor" },
   { href: "/#how-it-works", label: "How it works" },
 ];
 
