@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ClaimDocumentList } from "@/components/claims/claim-document-list";
 import { CLAIM_STATUS_META } from "@/components/claims/claim-status";
+import { ClaimThread } from "@/components/claims/claim-thread";
 import { Container } from "@/components/layout/container";
 import { Alert } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -185,6 +186,12 @@ function ClaimBody({
               </p>
             </div>
             <ClaimDocumentList claimId={claim.id} documents={claim.documents} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <ClaimThread claim={claim} side="customer" onUpdated={onUpdated} />
           </CardContent>
         </Card>
 

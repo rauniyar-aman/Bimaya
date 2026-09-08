@@ -106,3 +106,18 @@ class PolicyPurchaseSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
+
+
+class ProviderPurchaseSerializer(PolicyPurchaseSerializer):
+    """Purchase row for the provider's sales/history table.
+
+    The base purchase shape (policy + insured KYC nested) plus the buying
+    customer's name so a provider can see who bought their policy. Only the name
+    is exposed — no email or other contact PII, unlike the admin serializer.
+    """
+
+    customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+
+    class Meta(PolicyPurchaseSerializer.Meta):
+        fields = PolicyPurchaseSerializer.Meta.fields + ("customer_name",)
+        read_only_fields = fields

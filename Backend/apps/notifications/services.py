@@ -231,6 +231,70 @@ def notify_provider_approved(provider):
     )
 
 
+def notify_policy_approved(policy):
+    return notify(
+        policy.provider.user,
+        Notification.Type.POLICY_APPROVED,
+        "Policy approved",
+        f"“{policy.name}” has been approved and is now live on the marketplace.",
+        url="/provider",
+    )
+
+
+def notify_policy_deactivated(policy):
+    return notify(
+        policy.provider.user,
+        Notification.Type.POLICY_DEACTIVATED,
+        "Policy deactivated",
+        f"“{policy.name}” has been taken off the marketplace. "
+        "Submit it again to relist it.",
+        url="/provider",
+    )
+
+
+def notify_policy_rejected(policy):
+    return notify(
+        policy.provider.user,
+        Notification.Type.POLICY_REJECTED,
+        "Policy needs changes",
+        f"“{policy.name}” was sent back for review. "
+        "Update it and submit again when ready.",
+        url="/provider",
+    )
+
+
+# --- Claim messages ---------------------------------------------------------
+
+
+def notify_claim_message(claim, to):
+    """Notify the other party of a new message on ``claim``.
+
+    ``to`` is ``"customer"`` or ``"provider"`` — the recipient side. The message
+    body itself is never included (it may reference sensitive details); the
+    notification just points at the claim thread.
+    """
+    if to == "customer":
+        return notify(
+            claim.customer,
+            Notification.Type.CLAIM_MESSAGE,
+            "New message on your claim",
+            f"The provider sent a message about your claim on "
+            f"“{claim.purchase.policy.name}”.",
+            url=f"/dashboard/claims/{claim.id}",
+        )
+    provider_user = _provider_user(claim.purchase.policy)
+    if provider_user is None:
+        return None
+    return notify(
+        provider_user,
+        Notification.Type.CLAIM_MESSAGE,
+        "New message on a claim",
+        f"A customer sent a message about their claim on "
+        f"“{claim.purchase.policy.name}”.",
+        url="/provider",
+    )
+
+
 def _provider_user(policy):
     """The user account behind a policy's provider, or ``None``."""
     provider = getattr(policy, "provider", None)

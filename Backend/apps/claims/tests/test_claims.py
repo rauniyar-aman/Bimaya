@@ -25,7 +25,7 @@ from apps.policies.models import InsuranceCategory, Policy
 from apps.providers.models import Provider
 from apps.purchases.models import PolicyPurchase
 
-from ..models import Claim, ClaimDocument, ClaimPayout
+from ..models import Claim, ClaimDocument, ClaimMessage, ClaimPayout
 
 User = get_user_model()
 
@@ -532,6 +532,72 @@ class ClaimDocumentDownloadTests(APITestCase):
     def test_anonymous_cannot_download(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+@no_throttle
+@override_settings(MEDIA_ROOT=_MEDIA_ROOT)
+class ClaimMessageTests(APITestCase):
+    """The two-way customer↔provider message thread on a claim."""
+
+    def setUp(self):
+        self.category = InsuranceCategory.objects.create(name="Vehicle")
+        self.provider = make_provider()
+        self.policy = make_policy(self.provider, self.category)
+        self.customer = make_customer()
+        self.purchase = make_active_purchase(self.customer, self.policy)
+        self.claim = make_claim(self.customer, self.purchase)
+        self.customer_url = reverse("claim-message", args=[self.claim.id])
+        self.provider_url = reverse("provider-claim-message", args=[self.claim.id])
+
+    def test_customer_posts_message_provider_sees_it(self):
+        self.client.force_authenticate(self.customer)
+        response = self.client.post(
+            self.customer_url, {"body": "Any update on my claim?"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["messages"]), 1)
+        message = response.data["messages"][0]
+        self.assertEqual(message["author_role"], User.Role.CUSTOMER)
+        self.assertEqual(message["body"], "Any update on my claim?")
+        # The provider loads the same thread.
+        self.client.force_authenticate(self.provider.user)
+        detail = self.client.get(reverse("provider-claim-detail", args=[self.claim.id]))
+        self.assertEqual(len(detail.data["messages"]), 1)
+
+    def test_provider_posts_message_customer_sees_it(self):
+        self.client.force_authenticate(self.provider.user)
+        response = self.client.post(
+            self.provider_url, {"body": "We are reviewing it now."}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        message = response.data["messages"][0]
+        self.assertEqual(message["author_role"], User.Role.PROVIDER)
+        self.client.force_authenticate(self.customer)
+        detail = self.client.get(reverse("claim-detail", args=[self.claim.id]))
+        self.assertEqual(len(detail.data["messages"]), 1)
+
+    def test_empty_message_rejected(self):
+        self.client.force_authenticate(self.customer)
+        response = self.client.post(self.customer_url, {"body": "   "}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("body", response.data["errors"])
+
+    def test_other_customer_cannot_post(self):
+        self.client.force_authenticate(make_customer("other@bimaya.test"))
+        response = self.client.post(self.customer_url, {"body": "Hi"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_other_provider_cannot_post(self):
+        rival = make_provider("rival@bimaya.test", "Rival Co")
+        self.client.force_authenticate(rival.user)
+        response = self.client.post(self.provider_url, {"body": "Hi"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_message_notifies_the_other_side(self):
+        with mock.patch("apps.claims.views.notifications.notify_claim_message") as notify:
+            self.client.force_authenticate(self.customer)
+            self.client.post(self.customer_url, {"body": "Hello"}, format="json")
+        notify.assert_called_once_with(self.claim, to="provider")
 
 
 @no_throttle

@@ -6,7 +6,7 @@ from rest_framework import serializers
 from apps.policies.serializers import PolicyListSerializer
 from apps.purchases.models import PolicyPurchase
 
-from .models import Claim, ClaimDocument, ClaimPayout
+from .models import Claim, ClaimDocument, ClaimMessage, ClaimPayout
 
 # Statuses in which a claim is still "open" — a purchase may not have a second
 # claim opened while one of these is in flight.
@@ -30,6 +30,27 @@ class ClaimDocumentSerializer(serializers.ModelSerializer):
         model = ClaimDocument
         fields = ("id", "caption", "created_at")
         read_only_fields = fields
+
+
+class ClaimMessageSerializer(serializers.ModelSerializer):
+    """A single message in the claim thread."""
+
+    class Meta:
+        model = ClaimMessage
+        fields = ("id", "author_role", "body", "created_at")
+        read_only_fields = fields
+
+
+class ClaimMessageCreateSerializer(serializers.Serializer):
+    """Input for posting a message to a claim thread."""
+
+    body = serializers.CharField()
+
+    def validate_body(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Write a message before sending.")
+        return value
 
 
 class ClaimPurchaseSummarySerializer(serializers.ModelSerializer):
@@ -66,6 +87,7 @@ class ClaimSerializer(serializers.ModelSerializer):
     purchase = ClaimPurchaseSummarySerializer(read_only=True)
     documents = ClaimDocumentSerializer(many=True, read_only=True)
     payouts = ClaimPayoutSummarySerializer(many=True, read_only=True)
+    messages = ClaimMessageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Claim
@@ -81,6 +103,7 @@ class ClaimSerializer(serializers.ModelSerializer):
             "review_note",
             "documents",
             "payouts",
+            "messages",
             "decided_at",
             "settled_at",
             "created_at",

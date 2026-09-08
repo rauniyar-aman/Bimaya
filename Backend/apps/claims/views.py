@@ -40,10 +40,11 @@ from .exceptions import (
     ClaimNotResubmittable,
     PayoutNotConfirmable,
 )
-from .models import Claim, ClaimDocument, ClaimPayout
+from .models import Claim, ClaimDocument, ClaimMessage, ClaimPayout
 from .serializers import (
     ClaimApproveSerializer,
     ClaimCreateSerializer,
+    ClaimMessageCreateSerializer,
     ClaimPayoutConfirmSerializer,
     ClaimPayoutInitiateSerializer,
     ClaimRejectSerializer,
@@ -73,7 +74,7 @@ class ClaimBase:
         return (
             Claim.objects.for_customer(self.request.user)
             .select_related(*_CLAIM_RELATIONS)
-            .prefetch_related("documents", "payouts")
+            .prefetch_related("documents", "payouts", "messages")
         )
 
 
@@ -133,6 +134,35 @@ class ClaimResubmitView(ClaimBase, GenericAPIView):
 
 @extend_schema(
     tags=CLAIM_TAG,
+    summary="Post a message to a claim thread (customer side)",
+    request=ClaimMessageCreateSerializer,
+    responses=ClaimSerializer,
+)
+class ClaimMessageCreateView(ClaimBase, GenericAPIView):
+    """Customer posts a message to their claim's thread and the provider is
+    notified. Allowed in any status the customer can see the claim in."""
+
+    permission_classes = [IsCustomer, IsVerified, IsOwnerOrPlatformAdmin]
+    serializer_class = ClaimMessageCreateSerializer
+
+    def post(self, request, pk):
+        claim = get_object_or_404(self.get_queryset(), pk=pk)
+        self.check_object_permissions(request, claim)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ClaimMessage.objects.create(
+            claim=claim,
+            author=request.user,
+            author_role=request.user.role,
+            body=serializer.validated_data["body"],
+        )
+        notifications.notify_claim_message(claim, to="provider")
+        fresh = get_object_or_404(self.get_queryset(), pk=pk)
+        return Response(ClaimSerializer(fresh).data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=CLAIM_TAG,
     summary="Download a claim's supporting document",
     responses={(200, "application/octet-stream"): OpenApiTypes.BINARY},
 )
@@ -180,7 +210,7 @@ class ProviderClaimBase:
         return (
             Claim.objects.for_provider(provider)
             .select_related(*_CLAIM_RELATIONS)
-            .prefetch_related("documents", "payouts")
+            .prefetch_related("documents", "payouts", "messages")
         )
 
     def get_claim(self, pk):
@@ -195,6 +225,33 @@ class ProviderClaimListView(ProviderClaimBase, ListAPIView):
 @extend_schema(tags=CLAIM_TAG, summary="Retrieve a claim on one of the provider's policies")
 class ProviderClaimDetailView(ProviderClaimBase, RetrieveAPIView):
     pass
+
+
+@extend_schema(
+    tags=CLAIM_TAG,
+    summary="Post a message to a claim thread (provider side)",
+    request=ClaimMessageCreateSerializer,
+    responses=ClaimSerializer,
+)
+class ProviderClaimMessageCreateView(ProviderClaimBase, GenericAPIView):
+    """Provider posts a message to a claim thread on one of their policies and
+    the customer is notified."""
+
+    serializer_class = ClaimMessageCreateSerializer
+
+    def post(self, request, pk):
+        claim = self.get_claim(pk)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ClaimMessage.objects.create(
+            claim=claim,
+            author=request.user,
+            author_role=request.user.role,
+            body=serializer.validated_data["body"],
+        )
+        notifications.notify_claim_message(claim, to="customer")
+        fresh = self.get_claim(pk)
+        return Response(ClaimSerializer(fresh).data, status=status.HTTP_200_OK)
 
 
 @extend_schema(

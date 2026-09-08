@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ClaimDocumentList } from "@/components/claims/claim-document-list";
 import { CLAIM_STATUS_META } from "@/components/claims/claim-status";
+import { ClaimThread } from "@/components/claims/claim-thread";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -165,6 +166,10 @@ function ClaimReviewRow({
       </div>
 
       <ClaimActions claim={claim} onUpdated={onUpdated} />
+
+      <div className="mt-4 border-t border-line pt-4">
+        <ClaimThread claim={claim} side="provider" onUpdated={onUpdated} />
+      </div>
     </div>
   );
 }

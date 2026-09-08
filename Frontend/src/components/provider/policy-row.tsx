@@ -20,7 +20,7 @@ export function PolicyRow({
   onDeleted: (id: number) => void;
 }) {
   const { authFetch } = useAuth();
-  const [busy, setBusy] = useState<null | "submit" | "delete">(null);
+  const [busy, setBusy] = useState<null | "submit" | "delete" | "deactivate">(null);
   const [error, setError] = useState("");
 
   const meta = POLICY_STATUS_META[policy.status];
@@ -34,6 +34,24 @@ export function PolicyRow({
       onSubmitted(updated);
     } catch (err) {
       setError(errorMessage(err, "Could not submit this policy for review."));
+      setBusy(null);
+    }
+  }
+
+  async function handleDeactivate() {
+    if (
+      !window.confirm(
+        `Take "${policy.name}" off the marketplace? Submit it again to relist.`,
+      )
+    )
+      return;
+    setError("");
+    setBusy("deactivate");
+    try {
+      const updated = await api.provider.deactivatePolicy(authFetch, policy.id);
+      onSubmitted(updated);
+    } catch (err) {
+      setError(errorMessage(err, "Could not deactivate this policy."));
       setBusy(null);
     }
   }
@@ -82,6 +100,17 @@ export function PolicyRow({
               disabled={busy !== null}
             >
               Submit for review
+            </Button>
+          )}
+          {policy.status === "APPROVED" && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleDeactivate}
+              loading={busy === "deactivate"}
+              disabled={busy !== null}
+            >
+              Deactivate
             </Button>
           )}
           <button

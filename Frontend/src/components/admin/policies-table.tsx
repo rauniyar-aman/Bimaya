@@ -5,7 +5,9 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { POLICY_FILTERS } from "@/components/admin/filters";
 import { POLICY_STATUS_META } from "@/components/admin/status-meta";
 import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
@@ -14,6 +16,7 @@ import { SearchIcon } from "@/components/icons";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import {
   api,
+  errorMessage,
   type AdminPolicy,
   type Paginated,
   type PolicyStatus,
@@ -26,6 +29,9 @@ type State =
   | { phase: "error" }
   | { phase: "ready"; data: Paginated<AdminPolicy> };
 
+type Action = "approve" | "reject" | "deactivate";
+type Pending = { policy: AdminPolicy; action: Action };
+
 const FREQUENCY_LABELS: Record<string, string> = {
   MONTHLY: "/mo",
   QUARTERLY: "/qtr",
@@ -33,7 +39,16 @@ const FREQUENCY_LABELS: Record<string, string> = {
   ONE_TIME: " one-time",
 };
 
-/** Admin read-only table of every policy across providers. */
+const ACTION_COPY: Record<
+  Action,
+  { title: string; verb: string; variant: "success" | "primary" | "secondary" }
+> = {
+  approve: { title: "Approve policy", verb: "Approve", variant: "success" },
+  reject: { title: "Send policy back", verb: "Send back", variant: "primary" },
+  deactivate: { title: "Deactivate policy", verb: "Deactivate", variant: "secondary" },
+};
+
+/** Admin table of every policy across providers, with approve / reject / deactivate. */
 export function PoliciesTable() {
   const { authFetch } = useAuth();
   const [state, setState] = useState<State>({ phase: "loading" });
@@ -41,6 +56,10 @@ export function PoliciesTable() {
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
+
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [working, setWorking] = useState(false);
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +79,48 @@ export function PoliciesTable() {
       cancelled = true;
     };
   }, [authFetch, page, status, debouncedSearch]);
+
+  function updateRow(updated: AdminPolicy) {
+    setState((prev) =>
+      prev.phase === "ready"
+        ? {
+            phase: "ready",
+            data: {
+              ...prev.data,
+              results: prev.data.results.map((p) =>
+                p.id === updated.id ? updated : p,
+              ),
+            },
+          }
+        : prev,
+    );
+  }
+
+  function ask(policy: AdminPolicy, action: Action) {
+    setActionError("");
+    setPending({ policy, action });
+  }
+
+  async function confirm() {
+    if (!pending) return;
+    setWorking(true);
+    setActionError("");
+    try {
+      const { policy, action } = pending;
+      const updated =
+        action === "approve"
+          ? await api.admin.approvePolicy(authFetch, policy.id)
+          : action === "reject"
+            ? await api.admin.rejectPolicy(authFetch, policy.id)
+            : await api.admin.deactivatePolicy(authFetch, policy.id);
+      updateRow(updated);
+      setPending(null);
+    } catch (error) {
+      setActionError(errorMessage(error, "Could not update this policy."));
+    } finally {
+      setWorking(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -125,6 +186,7 @@ export function PoliciesTable() {
                 <TH className="text-right">Premium</TH>
                 <TH className="text-right">Coverage</TH>
                 <TH>Status</TH>
+                <TH className="text-right">Action</TH>
               </TR>
             </THead>
             <TBody>
@@ -156,6 +218,9 @@ export function PoliciesTable() {
                     <TD>
                       <StatusPill status={meta.variant}>{meta.label}</StatusPill>
                     </TD>
+                    <TD className="text-right">
+                      <PolicyActions policy={policy} onAction={ask} />
+                    </TD>
                   </TR>
                 );
               })}
@@ -165,6 +230,96 @@ export function PoliciesTable() {
           <Pagination page={page} count={state.data.count} onChange={setPage} />
         </>
       )}
+
+      <Modal
+        open={pending !== null}
+        onClose={() => (working ? undefined : setPending(null))}
+        title={pending ? ACTION_COPY[pending.action].title : ""}
+      >
+        {pending && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              {pending.action === "approve" && (
+                <>
+                  Approve{" "}
+                  <strong className="text-ink">{pending.policy.name}</strong> by{" "}
+                  {pending.policy.provider.company_name}? It goes live on the
+                  marketplace and the provider is notified.
+                </>
+              )}
+              {pending.action === "reject" && (
+                <>
+                  Send{" "}
+                  <strong className="text-ink">{pending.policy.name}</strong> back to{" "}
+                  {pending.policy.provider.company_name} for changes? It returns to
+                  pending review and stops appearing publicly.
+                </>
+              )}
+              {pending.action === "deactivate" && (
+                <>
+                  Deactivate{" "}
+                  <strong className="text-ink">{pending.policy.name}</strong>? It is
+                  removed from the marketplace until the provider resubmits it.
+                </>
+              )}
+            </p>
+            {actionError && <Alert variant="error">{actionError}</Alert>}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setPending(null)}
+                disabled={working}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant={ACTION_COPY[pending.action].variant}
+                onClick={confirm}
+                loading={working}
+              >
+                {ACTION_COPY[pending.action].verb}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
+}
+
+/** Status-driven action buttons for one policy row. */
+function PolicyActions({
+  policy,
+  onAction,
+}: {
+  policy: AdminPolicy;
+  onAction: (policy: AdminPolicy, action: Action) => void;
+}) {
+  if (policy.status === "PENDING") {
+    return (
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" size="sm" onClick={() => onAction(policy, "reject")}>
+          Send back
+        </Button>
+        <Button variant="success" size="sm" onClick={() => onAction(policy, "approve")}>
+          Approve
+        </Button>
+      </div>
+    );
+  }
+  if (policy.status === "APPROVED") {
+    return (
+      <Button variant="secondary" size="sm" onClick={() => onAction(policy, "deactivate")}>
+        Deactivate
+      </Button>
+    );
+  }
+  if (policy.status === "INACTIVE") {
+    return (
+      <Button variant="success" size="sm" onClick={() => onAction(policy, "approve")}>
+        Relist
+      </Button>
+    );
+  }
+  return <span className="text-xs text-muted">—</span>;
 }

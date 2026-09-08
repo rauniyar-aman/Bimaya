@@ -21,7 +21,11 @@ from rest_framework.response import Response
 from apps.core.permissions import IsOwnerOrPlatformAdmin, IsProvider, IsVerified
 from apps.providers.models import Provider
 
-from .exceptions import PolicyNotSubmittable, ProviderProfileRequired
+from .exceptions import (
+    PolicyNotDeactivatable,
+    PolicyNotSubmittable,
+    ProviderProfileRequired,
+)
 from .filters import PolicyFilter
 from .models import InsuranceCategory, Policy
 from .serializers import (
@@ -188,4 +192,29 @@ class ProviderPolicySubmitView(ProviderPolicyBase, GenericAPIView):
             raise PolicyNotSubmittable()
         policy.status = Policy.Status.PENDING
         policy.save(update_fields=["status", "updated_at"])
+        return Response(self.get_serializer(policy).data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=PROVIDER_TAG,
+    summary="Deactivate an own live policy",
+    request=None,
+    responses=ProviderPolicyWriteSerializer,
+)
+class ProviderPolicyDeactivateView(ProviderPolicyBase, GenericAPIView):
+    """Let a provider take their own live policy off the marketplace.
+
+    Relisting reuses the existing submit endpoint (an inactive policy can be
+    submitted for review again), so there is no separate relist action here.
+    """
+
+    permission_classes = [IsProvider, IsVerified, IsOwnerOrPlatformAdmin]
+    owner_field = "provider.user"
+
+    def post(self, request, pk):
+        policy = get_object_or_404(self.get_queryset(), pk=pk)
+        self.check_object_permissions(request, policy)
+        if policy.status != Policy.Status.APPROVED:
+            raise PolicyNotDeactivatable()
+        policy.deactivate()
         return Response(self.get_serializer(policy).data, status=status.HTTP_200_OK)

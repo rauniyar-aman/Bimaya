@@ -22,14 +22,18 @@ from apps.documents.models import CustomerKyc
 from apps.documents.serializers import CustomerKycSerializer
 from apps.notifications import services as notifications
 from apps.policies.models import Policy
-from apps.policies.serializers import PolicyListSerializer
 from apps.providers.models import Provider
 from apps.purchases.models import PolicyPurchase
 
 from .analytics import build_admin_analytics
-from .exceptions import PurchaseNotForwardable
+from .exceptions import (
+    PolicyNotActionable,
+    PurchaseNotForwardable,
+    UserNotSuspendable,
+)
 from .serializers import (
     AdminKycSerializer,
+    AdminPolicySerializer,
     AdminProviderSerializer,
     AdminPurchaseSerializer,
     AdminUserDetailSerializer,
@@ -262,12 +266,56 @@ class AdminUserDetailView(AdminBase, RetrieveAPIView):
         )
 
 
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Suspend a user",
+    request=None,
+    responses=AdminUserSerializer,
+)
+class AdminUserSuspendView(AdminBase, GenericAPIView):
+    """Deactivate a user's account so they can no longer sign in.
+
+    An administrator cannot suspend their own account or another
+    administrator, which keeps at least one admin able to sign in.
+    """
+
+    serializer_class = AdminUserSerializer
+
+    def post(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+        if user == request.user:
+            raise UserNotSuspendable("You cannot suspend your own account.")
+        if user.is_platform_admin:
+            raise UserNotSuspendable("Administrator accounts cannot be suspended here.")
+        if user.is_active:
+            user.is_active = False
+            user.save(update_fields=["is_active"])
+        return Response(AdminUserSerializer(user).data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Reactivate a user",
+    request=None,
+    responses=AdminUserSerializer,
+)
+class AdminUserReactivateView(AdminBase, GenericAPIView):
+    serializer_class = AdminUserSerializer
+
+    def post(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+        if not user.is_active:
+            user.is_active = True
+            user.save(update_fields=["is_active"])
+        return Response(AdminUserSerializer(user).data, status=status.HTTP_200_OK)
+
+
 # --- Policies ---------------------------------------------------------------
 
 
 @extend_schema(tags=ADMIN_TAG, summary="List all policies")
 class AdminPolicyListView(AdminBase, ListAPIView):
-    serializer_class = PolicyListSerializer
+    serializer_class = AdminPolicySerializer
     filterset_fields = ["status", "provider", "category", "is_featured"]
     search_fields = ["name", "provider__company_name"]
 
@@ -275,6 +323,77 @@ class AdminPolicyListView(AdminBase, ListAPIView):
         return Policy.objects.select_related("provider", "category").order_by(
             "-created_at"
         )
+
+
+class AdminPolicyActionBase(AdminBase, GenericAPIView):
+    """Base for the admin policy status actions.
+
+    Each subclass runs a guarded :class:`~apps.policies.models.Policy`
+    transition and notifies the owning provider. The response is the same
+    ``AdminPolicySerializer`` the list uses, so the frontend can patch the row
+    in place.
+    """
+
+    serializer_class = AdminPolicySerializer
+
+    def get_queryset(self):
+        return Policy.objects.select_related("provider", "provider__user", "category")
+
+    def _serialized(self, policy):
+        return Response(
+            AdminPolicySerializer(policy).data, status=status.HTTP_200_OK
+        )
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Approve a policy",
+    request=None,
+    responses=AdminPolicySerializer,
+)
+class AdminPolicyApproveView(AdminPolicyActionBase):
+    def post(self, request, pk):
+        policy = get_object_or_404(self.get_queryset(), pk=pk)
+        try:
+            policy.approve()
+        except ValueError as error:
+            raise PolicyNotActionable(str(error))
+        notifications.notify_policy_approved(policy)
+        return self._serialized(policy)
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Send a policy back for changes",
+    request=None,
+    responses=AdminPolicySerializer,
+)
+class AdminPolicyRejectView(AdminPolicyActionBase):
+    def post(self, request, pk):
+        policy = get_object_or_404(self.get_queryset(), pk=pk)
+        try:
+            policy.send_back()
+        except ValueError as error:
+            raise PolicyNotActionable(str(error))
+        notifications.notify_policy_rejected(policy)
+        return self._serialized(policy)
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Deactivate a policy",
+    request=None,
+    responses=AdminPolicySerializer,
+)
+class AdminPolicyDeactivateView(AdminPolicyActionBase):
+    def post(self, request, pk):
+        policy = get_object_or_404(self.get_queryset(), pk=pk)
+        try:
+            policy.deactivate()
+        except ValueError as error:
+            raise PolicyNotActionable(str(error))
+        notifications.notify_policy_deactivated(policy)
+        return self._serialized(policy)
 
 
 # --- Analytics --------------------------------------------------------------

@@ -385,6 +385,90 @@ class AdminUserAndPolicyTests(APITestCase):
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["name"], self.policy.name)
 
+    def test_approve_pending_policy(self):
+        pending = make_policy(
+            self.provider, self.category, name="Pending Plan",
+            status=Policy.Status.PENDING,
+        )
+        response = self.client.post(reverse("admin-policy-approve", args=[pending.id]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], Policy.Status.APPROVED)
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, Policy.Status.APPROVED)
+
+    def test_deactivate_approved_policy(self):
+        response = self.client.post(
+            reverse("admin-policy-deactivate", args=[self.policy.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], Policy.Status.INACTIVE)
+
+    def test_reject_sends_policy_back_for_changes(self):
+        response = self.client.post(
+            reverse("admin-policy-reject", args=[self.policy.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], Policy.Status.PENDING)
+
+    def test_approve_wrong_state_returns_code(self):
+        # An already-approved policy cannot be approved again.
+        response = self.client.post(
+            reverse("admin-policy-approve", args=[self.policy.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "policy_not_actionable")
+
+    def test_policy_action_forbidden_for_customer(self):
+        self.client.force_authenticate(self.customer)
+        response = self.client.post(
+            reverse("admin-policy-approve", args=[self.policy.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_policy_action_unauthorized_for_anonymous(self):
+        self.client.force_authenticate(None)
+        response = self.client.post(
+            reverse("admin-policy-approve", args=[self.policy.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_suspend_and_reactivate_user(self):
+        suspend = self.client.post(
+            reverse("admin-user-suspend", args=[self.customer.id])
+        )
+        self.assertEqual(suspend.status_code, status.HTTP_200_OK)
+        self.assertFalse(suspend.data["is_active"])
+        self.customer.refresh_from_db()
+        self.assertFalse(self.customer.is_active)
+
+        reactivate = self.client.post(
+            reverse("admin-user-reactivate", args=[self.customer.id])
+        )
+        self.assertEqual(reactivate.status_code, status.HTTP_200_OK)
+        self.assertTrue(reactivate.data["is_active"])
+
+    def test_cannot_suspend_self(self):
+        response = self.client.post(
+            reverse("admin-user-suspend", args=[self.admin.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "user_not_suspendable")
+
+    def test_cannot_suspend_another_admin(self):
+        other_admin = make_admin("admin2@bimaya.test")
+        response = self.client.post(
+            reverse("admin-user-suspend", args=[other_admin.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "user_not_suspendable")
+
+    def test_suspend_forbidden_for_customer(self):
+        self.client.force_authenticate(self.customer)
+        response = self.client.post(
+            reverse("admin-user-suspend", args=[self.provider.user.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
 
 @no_throttle
 @override_settings(MEDIA_ROOT=_MEDIA_ROOT)

@@ -16,6 +16,7 @@ import { SearchIcon } from "@/components/icons";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import {
   api,
+  errorMessage,
   type AdminUser,
   type AdminUserDetail,
   type Paginated,
@@ -29,7 +30,9 @@ type State =
   | { phase: "error" }
   | { phase: "ready"; data: Paginated<AdminUser> };
 
-/** Admin read-only users table with role filter, search and a detail modal. */
+type Pending = { user: AdminUser; action: "suspend" | "reactivate" };
+
+/** Admin users table with role filter, search, a detail modal and suspend / reactivate. */
 export function UsersTable() {
   const { authFetch } = useAuth();
   const [state, setState] = useState<State>({ phase: "loading" });
@@ -38,6 +41,10 @@ export function UsersTable() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
   const [activeId, setActiveId] = useState<number | null>(null);
+
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [working, setWorking] = useState(false);
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +64,40 @@ export function UsersTable() {
       cancelled = true;
     };
   }, [authFetch, page, role, debouncedSearch]);
+
+  function updateRow(updated: AdminUser) {
+    setState((prev) =>
+      prev.phase === "ready"
+        ? {
+            phase: "ready",
+            data: {
+              ...prev.data,
+              results: prev.data.results.map((u) =>
+                u.id === updated.id ? updated : u,
+              ),
+            },
+          }
+        : prev,
+    );
+  }
+
+  async function confirm() {
+    if (!pending) return;
+    setWorking(true);
+    setActionError("");
+    try {
+      const updated =
+        pending.action === "suspend"
+          ? await api.admin.suspendUser(authFetch, pending.user.id)
+          : await api.admin.reactivateUser(authFetch, pending.user.id);
+      updateRow(updated);
+      setPending(null);
+    } catch (error) {
+      setActionError(errorMessage(error, "Could not update this user."));
+    } finally {
+      setWorking(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -149,13 +190,39 @@ export function UsersTable() {
                     </TD>
                     <TD className="text-muted">{formatDate(u.date_joined)}</TD>
                     <TD className="text-right">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setActiveId(u.id)}
-                      >
-                        View
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setActiveId(u.id)}
+                        >
+                          View
+                        </Button>
+                        {u.role !== "ADMIN" &&
+                          (u.is_active ? (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                setActionError("");
+                                setPending({ user: u, action: "suspend" });
+                              }}
+                            >
+                              Suspend
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="success"
+                              size="sm"
+                              onClick={() => {
+                                setActionError("");
+                                setPending({ user: u, action: "reactivate" });
+                              }}
+                            >
+                              Reactivate
+                            </Button>
+                          ))}
+                      </div>
                     </TD>
                   </TR>
                 );
@@ -166,6 +233,54 @@ export function UsersTable() {
           <Pagination page={page} count={state.data.count} onChange={setPage} />
         </>
       )}
+
+      <Modal
+        open={pending !== null}
+        onClose={() => (working ? undefined : setPending(null))}
+        title={pending?.action === "suspend" ? "Suspend user" : "Reactivate user"}
+      >
+        {pending && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              {pending.action === "suspend" ? (
+                <>
+                  Suspend{" "}
+                  <strong className="text-ink">
+                    {pending.user.full_name || pending.user.email}
+                  </strong>
+                  ? They will be signed out and cannot sign in again until
+                  reactivated.
+                </>
+              ) : (
+                <>
+                  Reactivate{" "}
+                  <strong className="text-ink">
+                    {pending.user.full_name || pending.user.email}
+                  </strong>
+                  ? They will be able to sign in again.
+                </>
+              )}
+            </p>
+            {actionError && <Alert variant="error">{actionError}</Alert>}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setPending(null)}
+                disabled={working}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant={pending.action === "suspend" ? "primary" : "success"}
+                onClick={confirm}
+                loading={working}
+              >
+                {pending.action === "suspend" ? "Suspend" : "Reactivate"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <UserDetailModal
         key={activeId ?? "none"}

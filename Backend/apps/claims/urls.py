@@ -6,10 +6,12 @@ from .views import (
     ClaimDetailView,
     ClaimDocumentDownloadView,
     ClaimListCreateView,
+    ClaimMessageCreateView,
     ClaimResubmitView,
     ProviderClaimApproveView,
     ProviderClaimDetailView,
     ProviderClaimListView,
+    ProviderClaimMessageCreateView,
     ProviderClaimPayoutConfirmView,
     ProviderClaimPayoutInitiateView,
     ProviderClaimRejectView,
@@ -23,6 +25,11 @@ urlpatterns = [
     path("claims/<int:pk>/", ClaimDetailView.as_view(), name="claim-detail"),
     path("claims/<int:pk>/resubmit/", ClaimResubmitView.as_view(), name="claim-resubmit"),
     path(
+        "claims/<int:pk>/messages/",
+        ClaimMessageCreateView.as_view(),
+        name="claim-message",
+    ),
+    path(
         "claims/<int:pk>/documents/<int:doc_pk>/",
         ClaimDocumentDownloadView.as_view(),
         name="claim-document",
@@ -33,6 +40,11 @@ urlpatterns = [
         "provider/claims/<int:pk>/",
         ProviderClaimDetailView.as_view(),
         name="provider-claim-detail",
+    ),
+    path(
+        "provider/claims/<int:pk>/messages/",
+        ProviderClaimMessageCreateView.as_view(),
+        name="provider-claim-message",
     ),
     path(
         "provider/claims/<int:pk>/start-review/",

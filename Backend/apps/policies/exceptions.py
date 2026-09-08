@@ -17,3 +17,11 @@ class PolicyNotSubmittable(APIException):
     status_code = 400
     default_detail = "Only draft or inactive policies can be submitted for review."
     default_code = "policy_not_submittable"
+
+
+class PolicyNotDeactivatable(APIException):
+    """The policy is not live, so it cannot be deactivated."""
+
+    status_code = 400
+    default_detail = "Only an approved (live) policy can be deactivated."
+    default_code = "policy_not_deactivatable"

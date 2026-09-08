@@ -8,6 +8,7 @@ from .views import (
     PolicyPurchaseListCreateView,
     ProviderIssuanceListView,
     ProviderIssueView,
+    ProviderPurchaseListView,
     PurchaseCertificateView,
     PurchaseReceiptView,
 )
@@ -40,5 +41,10 @@ urlpatterns = [
         "provider/issuance/<int:pk>/issue/",
         ProviderIssueView.as_view(),
         name="provider-issuance-issue",
+    ),
+    path(
+        "provider/purchases/",
+        ProviderPurchaseListView.as_view(),
+        name="provider-purchase-list",
     ),
 ]

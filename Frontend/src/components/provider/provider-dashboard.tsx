@@ -7,6 +7,7 @@ import { ClaimReviewQueue } from "@/components/provider/claim-review-queue";
 import { IssuanceQueue } from "@/components/provider/issuance-queue";
 import { PolicyRow } from "@/components/provider/policy-row";
 import { ProviderAnalyticsSection } from "@/components/provider/provider-analytics";
+import { ProviderSales } from "@/components/provider/provider-sales";
 import { Container } from "@/components/layout/container";
 import { Alert } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
@@ -124,6 +125,7 @@ export function ProviderDashboard() {
               <ProviderAnalyticsSection />
               <IssuanceQueue />
               <ClaimReviewQueue />
+              <ProviderSales />
             </>
           )}
         </div>

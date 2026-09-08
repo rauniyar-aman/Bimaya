@@ -428,6 +428,17 @@ export interface ProviderIssuanceItem {
   created_at: string;
 }
 
+/** A purchase on one of the provider's policies, with the buying customer's name. */
+export interface ProviderPurchase extends PolicyPurchase {
+  customer_name: string;
+}
+
+export interface ProviderPurchaseListParams {
+  status?: PurchaseStatus;
+  search?: string;
+  page?: number;
+}
+
 export interface PaymentInitiateInput {
   policy_purchase_id: number;
   gateway: PaymentGateway;
@@ -491,7 +502,16 @@ export interface ClaimPurchaseSummary {
   status: PurchaseStatus;
 }
 
-/** A customer's insurance claim, with purchase, documents and payouts nested. */
+/** One message in a claim's customer↔insurer thread. */
+export interface ClaimMessage {
+  id: number;
+  /** Whose side posted it, denormalised so the UI can label You/Insurer. */
+  author_role: UserRole;
+  body: string;
+  created_at: string;
+}
+
+/** A customer's insurance claim, with purchase, documents, payouts and thread nested. */
 export interface Claim {
   id: number;
   purchase: ClaimPurchaseSummary;
@@ -504,6 +524,7 @@ export interface Claim {
   review_note: string;
   documents: ClaimDocument[];
   payouts: ClaimPayoutSummary[];
+  messages: ClaimMessage[];
   decided_at: string | null;
   settled_at: string | null;
   created_at: string;
@@ -930,6 +951,18 @@ export const api = {
         method: "POST",
       }),
 
+    /** Take a live (APPROVED) policy off the marketplace; relist via submitPolicy. */
+    deactivatePolicy: (authFetch: AuthFetch, id: number) =>
+      authFetch<ProviderPolicy>(`/provider/policies/${id}/deactivate/`, {
+        method: "POST",
+      }),
+
+    /** Every purchase on this provider's policies (sales history), newest first. */
+    listPurchases: (authFetch: AuthFetch, params: ProviderPurchaseListParams = {}) =>
+      authFetch<Paginated<ProviderPurchase>>(
+        `/provider/purchases/${toQuery(params as Record<string, unknown>)}`,
+      ),
+
     /** Purchases forwarded to this provider, waiting for a policy number. */
     listIssuance: (authFetch: AuthFetch) =>
       authFetch<Paginated<ProviderIssuanceItem>>("/provider/issuance/"),
@@ -989,6 +1022,13 @@ export const api = {
       authFetch<Claim>(`/provider/claims/${id}/payout/confirm/`, {
         method: "POST",
         json: payoutId ? { payout_id: payoutId } : {},
+      }),
+
+    /** Post a message to a claim's thread (provider side); the customer is notified. */
+    postClaimMessage: (authFetch: AuthFetch, id: number, body: string) =>
+      authFetch<Claim>(`/provider/claims/${id}/messages/`, {
+        method: "POST",
+        json: { body },
       }),
   },
 
@@ -1053,6 +1093,13 @@ export const api = {
     /** Download a supporting document via the authenticated owner/underwriter route. */
     document: (authFetch: AuthFetch, claimId: number, docId: number) =>
       authFetch<Blob>(`/claims/${claimId}/documents/${docId}/`, { blob: true }),
+
+    /** Post a message to a claim's thread (customer side); the insurer is notified. */
+    postMessage: (authFetch: AuthFetch, id: number, body: string) =>
+      authFetch<Claim>(`/claims/${id}/messages/`, {
+        method: "POST",
+        json: { body },
+      }),
   },
 
   payments: {
@@ -1158,11 +1205,31 @@ export const api = {
     getUser: (authFetch: AuthFetch, id: number) =>
       authFetch<AdminUserDetail>(`/admin/users/${id}/`),
 
+    /** Suspend a user (deactivate their account so they can no longer sign in). */
+    suspendUser: (authFetch: AuthFetch, id: number) =>
+      authFetch<AdminUser>(`/admin/users/${id}/suspend/`, { method: "POST" }),
+
+    /** Reactivate a previously suspended user. */
+    reactivateUser: (authFetch: AuthFetch, id: number) =>
+      authFetch<AdminUser>(`/admin/users/${id}/reactivate/`, { method: "POST" }),
+
     /* Policies */
     listPolicies: (authFetch: AuthFetch, params: AdminPolicyListParams = {}) =>
       authFetch<Paginated<AdminPolicy>>(
         `/admin/policies/${toQuery(params as Record<string, unknown>)}`,
       ),
+
+    /** Approve a pending (or relist an inactive) policy onto the marketplace. */
+    approvePolicy: (authFetch: AuthFetch, id: number) =>
+      authFetch<AdminPolicy>(`/admin/policies/${id}/approve/`, { method: "POST" }),
+
+    /** Send a pending policy back to the provider for changes. */
+    rejectPolicy: (authFetch: AuthFetch, id: number) =>
+      authFetch<AdminPolicy>(`/admin/policies/${id}/reject/`, { method: "POST" }),
+
+    /** Take a live policy off the marketplace. */
+    deactivatePolicy: (authFetch: AuthFetch, id: number) =>
+      authFetch<AdminPolicy>(`/admin/policies/${id}/deactivate/`, { method: "POST" }),
 
     /* Analytics */
     analytics: (authFetch: AuthFetch) =>

@@ -123,3 +123,28 @@ class Policy(TimeStampedModel):
     @property
     def is_public(self):
         return self.status == self.Status.APPROVED and self.provider.is_approved
+
+    # --- Status transitions -------------------------------------------------
+    # Guarded transitions used by both the Django admin and the admin REST API,
+    # so status changes go through one place and always touch ``updated_at``.
+
+    def approve(self):
+        """Make the policy public: PENDING or INACTIVE -> APPROVED."""
+        if self.status not in (self.Status.PENDING, self.Status.INACTIVE):
+            raise ValueError("Only a pending or inactive policy can be approved.")
+        self.status = self.Status.APPROVED
+        self.save(update_fields=["status", "updated_at"])
+
+    def send_back(self):
+        """Return a policy for re-review: APPROVED or PENDING -> PENDING."""
+        if self.status not in (self.Status.APPROVED, self.Status.PENDING):
+            raise ValueError("Only an approved or pending policy can be sent back.")
+        self.status = self.Status.PENDING
+        self.save(update_fields=["status", "updated_at"])
+
+    def deactivate(self):
+        """Take a policy off the marketplace: APPROVED -> INACTIVE."""
+        if self.status != self.Status.APPROVED:
+            raise ValueError("Only an approved policy can be deactivated.")
+        self.status = self.Status.INACTIVE
+        self.save(update_fields=["status", "updated_at"])

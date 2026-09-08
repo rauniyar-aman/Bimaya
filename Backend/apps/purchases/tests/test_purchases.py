@@ -370,6 +370,76 @@ class ProviderIssuanceTests(APITestCase):
 
 
 @no_throttle
+class ProviderPurchaseListTests(APITestCase):
+    """The provider's read-only sales/history list across their own policies."""
+
+    def setUp(self):
+        self.category = InsuranceCategory.objects.create(name="Life")
+        self.provider = make_provider()
+        self.policy = make_policy(self.provider, self.category)
+        self.customer = make_customer()
+        self.mine = PolicyPurchase.objects.create(
+            customer=self.customer,
+            policy=self.policy,
+            nominee_name="Sita Sharma",
+            nominee_relationship="Spouse",
+            nominee_contact="9800000000",
+            status=PolicyPurchase.Status.ACTIVE,
+        )
+        self.url = reverse("provider-purchase-list")
+
+    def test_lists_all_own_purchases_regardless_of_status(self):
+        # A pending-payment purchase on my policy should still appear here.
+        PolicyPurchase.objects.create(
+            customer=self.customer,
+            policy=self.policy,
+            nominee_name="X",
+            nominee_relationship="Y",
+            nominee_contact="9800000001",
+            status=PolicyPurchase.Status.PENDING_PAYMENT,
+        )
+        self.client.force_authenticate(self.provider.user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+        self.assertIn("customer_name", response.data["results"][0])
+
+    def test_excludes_other_providers_purchases(self):
+        rival = make_provider("rival@bimaya.test", "Rival Co")
+        PolicyPurchase.objects.create(
+            customer=make_customer("c2@bimaya.test"),
+            policy=make_policy(rival, self.category, name="Rival Plan"),
+            nominee_name="X",
+            nominee_relationship="Y",
+            nominee_contact="9800000002",
+            status=PolicyPurchase.Status.ACTIVE,
+        )
+        self.client.force_authenticate(self.provider.user)
+        response = self.client.get(self.url)
+        ids = {row["id"] for row in response.data["results"]}
+        self.assertEqual(ids, {self.mine.id})
+
+    def test_status_filter(self):
+        PolicyPurchase.objects.create(
+            customer=self.customer,
+            policy=self.policy,
+            nominee_name="X",
+            nominee_relationship="Y",
+            nominee_contact="9800000003",
+            status=PolicyPurchase.Status.CANCELLED,
+        )
+        self.client.force_authenticate(self.provider.user)
+        response = self.client.get(self.url, {"status": PolicyPurchase.Status.ACTIVE})
+        statuses = {row["status"] for row in response.data["results"]}
+        self.assertEqual(statuses, {PolicyPurchase.Status.ACTIVE})
+
+    def test_customer_forbidden(self):
+        self.client.force_authenticate(self.customer)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+@no_throttle
 class PurchaseDocumentTests(APITestCase):
     """Owner-only certificate + receipt PDF downloads."""
 

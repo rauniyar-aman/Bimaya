@@ -135,6 +135,32 @@ class Claim(TimeStampedModel):
         self.save(update_fields=["status", "settled_at", "updated_at"])
 
 
+class ClaimMessage(TimeStampedModel):
+    """A message in the customer↔provider thread on a claim.
+
+    Either party may post free-form messages so they can clear up questions
+    without the one-way ``review_note``. ``author_role`` is denormalised at
+    write time so the thread still renders "you"/"insurer" labels correctly even
+    if the author's account role later changes.
+    """
+
+    claim = models.ForeignKey(Claim, on_delete=models.CASCADE, related_name="messages")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="claim_messages",
+    )
+    author_role = models.CharField(max_length=20)
+    body = models.TextField()
+
+    class Meta(TimeStampedModel.Meta):
+        ordering = ["created_at"]
+        indexes = [models.Index(fields=["claim", "created_at"])]
+
+    def __str__(self):
+        return f"{self.claim_id} · {self.author_role} · {self.created_at:%Y-%m-%d %H:%M}"
+
+
 class ClaimDocument(TimeStampedModel):
     """A supporting file on a claim (a bill, a medical/police report, a photo).
 

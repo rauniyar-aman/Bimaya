@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from apps.documents.models import CustomerKyc
+from apps.policies.serializers import PolicyListSerializer
 from apps.providers.models import Provider
 from apps.purchases.serializers import PolicyPurchaseSerializer
 
@@ -150,4 +151,16 @@ class AdminPurchaseSerializer(PolicyPurchaseSerializer):
             "customer_email",
             "customer_name",
         )
+        read_only_fields = fields
+
+
+class AdminPolicySerializer(PolicyListSerializer):
+    """Policy row for the admin all-policies table.
+
+    The public card shape plus ``status`` so an administrator can see and drive
+    each policy through review from the branded ``/admin`` UI.
+    """
+
+    class Meta(PolicyListSerializer.Meta):
+        fields = PolicyListSerializer.Meta.fields + ("status", "created_at")
         read_only_fields = fields

@@ -8,6 +8,7 @@ from .views import (
     PolicyCompareView,
     PolicyDetailView,
     PolicyListView,
+    ProviderPolicyDeactivateView,
     ProviderPolicyDetailView,
     ProviderPolicyListCreateView,
     ProviderPolicySubmitView,
@@ -31,6 +32,11 @@ urlpatterns = [
         "provider/policies/<int:pk>/submit/",
         ProviderPolicySubmitView.as_view(),
         name="provider-policy-submit",
+    ),
+    path(
+        "provider/policies/<int:pk>/deactivate/",
+        ProviderPolicyDeactivateView.as_view(),
+        name="provider-policy-deactivate",
     ),
     path("policies/", PolicyListView.as_view(), name="policy-list"),
     # `compare` must precede the slug route so it is not read as a slug.

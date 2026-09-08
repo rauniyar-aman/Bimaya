@@ -35,6 +35,7 @@ from .serializers import (
     PolicyIssueSerializer,
     PolicyPurchaseCreateSerializer,
     PolicyPurchaseSerializer,
+    ProviderPurchaseSerializer,
 )
 
 PURCHASE_TAG = ["purchases"]
@@ -189,6 +190,21 @@ class ProviderIssuanceBase:
 class ProviderIssuanceListView(ProviderIssuanceBase, ListAPIView):
     def get_queryset(self):
         return super().get_queryset().filter(status=PolicyPurchase.Status.FORWARDED)
+
+
+@extend_schema(tags=PURCHASE_TAG, summary="List all purchases on the provider's policies")
+class ProviderPurchaseListView(ProviderIssuanceBase, ListAPIView):
+    """Read-only sales/history list across every purchase of the provider's own
+    policies — the full funnel, not just the issuance queue — filterable by
+    status and searchable by policy name or number."""
+
+    serializer_class = ProviderPurchaseSerializer
+    filterset_fields = ["status"]
+    search_fields = ["policy__name", "policy_number"]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("customer").order_by("-created_at")
 
 
 @extend_schema(

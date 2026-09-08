@@ -156,3 +156,55 @@ class ProviderPolicyCrudTests(APITestCase):
         self.client.force_authenticate(customer)
         response = self.client.post(self.list_url, self._valid_payload(), format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_deactivate_own_live_policy(self):
+        policy = Policy.objects.create(
+            provider=self.provider, category=self.category, name="Live",
+            premium=Decimal("1"), coverage_amount=Decimal("1"), term_months=12,
+            status=Policy.Status.APPROVED,
+        )
+        self.client.force_authenticate(self.user)
+        response = self.client.post(
+            reverse("provider-policy-deactivate", args=[policy.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        policy.refresh_from_db()
+        self.assertEqual(policy.status, Policy.Status.INACTIVE)
+
+    def test_deactivate_non_approved_policy_rejected(self):
+        policy = Policy.objects.create(
+            provider=self.provider, category=self.category, name="Draft",
+            premium=Decimal("1"), coverage_amount=Decimal("1"), term_months=12,
+            status=Policy.Status.DRAFT,
+        )
+        self.client.force_authenticate(self.user)
+        response = self.client.post(
+            reverse("provider-policy-deactivate", args=[policy.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "policy_not_deactivatable")
+
+    def test_cannot_deactivate_another_providers_policy(self):
+        _, other = make_provider("other@bimaya.test", "Other Co")
+        policy = Policy.objects.create(
+            provider=other, category=self.category, name="Other Live",
+            premium=Decimal("1"), coverage_amount=Decimal("1"), term_months=12,
+            status=Policy.Status.APPROVED,
+        )
+        self.client.force_authenticate(self.user)
+        response = self.client.post(
+            reverse("provider-policy-deactivate", args=[policy.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_relist_inactive_policy_via_submit(self):
+        policy = Policy.objects.create(
+            provider=self.provider, category=self.category, name="Dormant",
+            premium=Decimal("1"), coverage_amount=Decimal("1"), term_months=12,
+            status=Policy.Status.INACTIVE,
+        )
+        self.client.force_authenticate(self.user)
+        response = self.client.post(reverse("provider-policy-submit", args=[policy.id]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        policy.refresh_from_db()
+        self.assertEqual(policy.status, Policy.Status.PENDING)

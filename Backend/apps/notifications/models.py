@@ -42,6 +42,10 @@ class Notification(TimeStampedModel):
         PROVIDER_APPROVED = "PROVIDER_APPROVED", "Provider approved"
         PROVIDER_NEW_ISSUANCE = "PROVIDER_NEW_ISSUANCE", "New purchase to issue"
         PROVIDER_NEW_CLAIM = "PROVIDER_NEW_CLAIM", "New claim to review"
+        POLICY_APPROVED = "POLICY_APPROVED", "Policy approved"
+        POLICY_DEACTIVATED = "POLICY_DEACTIVATED", "Policy deactivated"
+        POLICY_REJECTED = "POLICY_REJECTED", "Policy sent back for changes"
+        CLAIM_MESSAGE = "CLAIM_MESSAGE", "New claim message"
 
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,

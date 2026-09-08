@@ -9,7 +9,10 @@ from .views import (
     AdminKycListView,
     AdminKycRejectView,
     AdminKycVerifyView,
+    AdminPolicyApproveView,
+    AdminPolicyDeactivateView,
     AdminPolicyListView,
+    AdminPolicyRejectView,
     AdminProviderApproveView,
     AdminProviderDetailView,
     AdminProviderListView,
@@ -18,6 +21,8 @@ from .views import (
     AdminPurchaseListView,
     AdminUserDetailView,
     AdminUserListView,
+    AdminUserReactivateView,
+    AdminUserSuspendView,
 )
 
 urlpatterns = [
@@ -63,8 +68,33 @@ urlpatterns = [
     # Users
     path("users/", AdminUserListView.as_view(), name="admin-user-list"),
     path("users/<int:pk>/", AdminUserDetailView.as_view(), name="admin-user-detail"),
+    path(
+        "users/<int:pk>/suspend/",
+        AdminUserSuspendView.as_view(),
+        name="admin-user-suspend",
+    ),
+    path(
+        "users/<int:pk>/reactivate/",
+        AdminUserReactivateView.as_view(),
+        name="admin-user-reactivate",
+    ),
     # Policies
     path("policies/", AdminPolicyListView.as_view(), name="admin-policy-list"),
+    path(
+        "policies/<int:pk>/approve/",
+        AdminPolicyApproveView.as_view(),
+        name="admin-policy-approve",
+    ),
+    path(
+        "policies/<int:pk>/reject/",
+        AdminPolicyRejectView.as_view(),
+        name="admin-policy-reject",
+    ),
+    path(
+        "policies/<int:pk>/deactivate/",
+        AdminPolicyDeactivateView.as_view(),
+        name="admin-policy-deactivate",
+    ),
     # Analytics
     path("analytics/", AdminAnalyticsView.as_view(), name="admin-analytics"),
 ]
