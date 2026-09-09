@@ -9,6 +9,8 @@ from .views import (
     AdminKycListView,
     AdminKycRejectView,
     AdminKycVerifyView,
+    AdminPayoutListView,
+    AdminPayoutReportView,
     AdminPolicyApproveView,
     AdminPolicyDeactivateView,
     AdminPolicyListView,
@@ -21,6 +23,7 @@ from .views import (
     AdminProviderMemberListCreateView,
     AdminProviderReportView,
     AdminProviderRevokeView,
+    AdminProviderSetCommissionView,
     AdminPurchaseForwardView,
     AdminPurchaseListView,
     AdminPurchaseReportView,
@@ -48,6 +51,11 @@ urlpatterns = [
         "providers/<int:pk>/revoke/",
         AdminProviderRevokeView.as_view(),
         name="admin-provider-revoke",
+    ),
+    path(
+        "providers/<int:pk>/commission/",
+        AdminProviderSetCommissionView.as_view(),
+        name="admin-provider-commission",
     ),
     path(
         "providers/<int:pk>/members/",
@@ -81,6 +89,8 @@ urlpatterns = [
         AdminPurchaseForwardView.as_view(),
         name="admin-purchase-forward",
     ),
+    # Provider payouts
+    path("payouts/", AdminPayoutListView.as_view(), name="admin-payout-list"),
     # Users
     path("users/", AdminUserListView.as_view(), name="admin-user-list"),
     path("users/<int:pk>/", AdminUserDetailView.as_view(), name="admin-user-detail"),
@@ -133,5 +143,10 @@ urlpatterns = [
         "reports/purchases/",
         AdminPurchaseReportView.as_view(),
         name="admin-report-purchases",
+    ),
+    path(
+        "reports/payouts/",
+        AdminPayoutReportView.as_view(),
+        name="admin-report-payouts",
     ),
 ]

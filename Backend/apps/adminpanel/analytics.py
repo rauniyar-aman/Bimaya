@@ -14,7 +14,7 @@ from apps.documents.models import CustomerKyc
 from apps.payments.models import Payment
 from apps.policies.models import Policy
 from apps.providers.models import Provider
-from apps.purchases.models import PolicyPurchase
+from apps.purchases.models import PolicyPurchase, ProviderPayout
 
 User = get_user_model()
 
@@ -33,6 +33,9 @@ def build_admin_analytics():
     providers_pending = providers_total - providers_approved
     premium_collected = successful_payments.aggregate(total=Sum("amount"))["total"]
     claims_settled = settled_payouts.aggregate(total=Sum("amount"))["total"]
+    commission_earned = ProviderPayout.objects.aggregate(
+        total=Sum("commission_amount")
+    )["total"]
 
     return {
         "stats": [
@@ -41,6 +44,7 @@ def build_admin_analytics():
             {"key": "policies", "label": "Published policies", "value": Policy.objects.filter(status=Policy.Status.APPROVED).count(), "format": "count"},
             {"key": "purchases", "label": "Purchases", "value": purchases.count(), "format": "count"},
             {"key": "premium", "label": "Premium collected", "value": money(premium_collected), "format": "currency"},
+            {"key": "commission", "label": "Commission earned", "value": money(commission_earned), "format": "currency"},
             {"key": "settled", "label": "Claims settled", "value": money(claims_settled), "format": "currency"},
         ],
         "users_by_role": field_breakdown(User.objects.all(), "role", User.Role.choices),

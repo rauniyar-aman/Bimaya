@@ -24,7 +24,7 @@ from apps.documents.serializers import CustomerKycSerializer
 from apps.notifications import services as notifications
 from apps.policies.models import Policy
 from apps.providers.models import Provider, ProviderMembership, ProviderRole
-from apps.purchases.models import PolicyPurchase
+from apps.purchases.models import PolicyPurchase, ProviderPayout
 
 from .analytics import build_admin_analytics
 from .exceptions import (
@@ -35,7 +35,9 @@ from .exceptions import (
 from .reports import csv_response, local_date, money, yes_no
 from .serializers import (
     AdminKycSerializer,
+    AdminPayoutSerializer,
     AdminPolicySerializer,
+    AdminProviderCommissionSerializer,
     AdminProviderSerializer,
     AdminPurchaseSerializer,
     AdminUserDetailSerializer,
@@ -147,6 +149,32 @@ class AdminProviderRevokeView(AdminBase, GenericAPIView):
         if provider.is_approved:
             provider.is_approved = False
             provider.save(update_fields=["is_approved", "updated_at"])
+        return Response(
+            AdminProviderApproveView._serialize(provider), status=status.HTTP_200_OK
+        )
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Set a provider's commission rate",
+    request=AdminProviderCommissionSerializer,
+    responses=AdminProviderSerializer,
+)
+class AdminProviderSetCommissionView(AdminBase, GenericAPIView):
+    """Set the platform commission percent charged on this provider's sales.
+
+    Only the rate applied to *future* issuances changes; existing payouts keep
+    the rate snapshotted when they were created.
+    """
+
+    serializer_class = AdminProviderCommissionSerializer
+
+    def post(self, request, pk):
+        provider = get_object_or_404(Provider, pk=pk)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        provider.commission_rate = serializer.validated_data["commission_rate"]
+        provider.save(update_fields=["commission_rate", "updated_at"])
         return Response(
             AdminProviderApproveView._serialize(provider), status=status.HTTP_200_OK
         )
@@ -413,6 +441,25 @@ class AdminPurchaseForwardView(AdminPurchaseBase, GenericAPIView):
         )
 
 
+# --- Provider payouts -------------------------------------------------------
+
+
+@extend_schema(tags=ADMIN_TAG, summary="List provider payouts")
+class AdminPayoutListView(AdminBase, ListAPIView):
+    serializer_class = AdminPayoutSerializer
+    filterset_fields = ["status", "provider"]
+    search_fields = [
+        "provider__company_name",
+        "purchase__policy__name",
+        "purchase__policy_number",
+    ]
+
+    def get_queryset(self):
+        return ProviderPayout.objects.select_related(
+            "provider", "purchase", "purchase__policy"
+        ).order_by("-created_at")
+
+
 # --- Users ------------------------------------------------------------------
 
 
@@ -648,6 +695,28 @@ class AdminPurchaseReportView(CsvExportMixin, AdminPurchaseListView):
         ("Purchased", lambda p: local_date(p.created_at)),
         ("Start", lambda p: local_date(p.start_date)),
         ("End", lambda p: local_date(p.end_date)),
+    ]
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Export provider payouts as CSV",
+    responses={200: OpenApiTypes.BINARY},
+)
+class AdminPayoutReportView(CsvExportMixin, AdminPayoutListView):
+    report_basename = "bimaya-payouts"
+    report_columns = [
+        ("ID", lambda p: p.id),
+        ("Provider", lambda p: p.provider.company_name),
+        ("Policy", lambda p: p.purchase.policy.name),
+        ("Policy number", lambda p: p.purchase.policy_number or ""),
+        ("Gross (NPR)", lambda p: money(p.gross_amount)),
+        ("Commission %", lambda p: money(p.commission_rate)),
+        ("Commission (NPR)", lambda p: money(p.commission_amount)),
+        ("Net payable (NPR)", lambda p: money(p.net_amount)),
+        ("Status", lambda p: p.get_status_display()),
+        ("Paid", lambda p: local_date(p.paid_at)),
+        ("Created", lambda p: local_date(p.created_at)),
     ]
 
 

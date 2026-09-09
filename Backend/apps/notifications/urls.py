@@ -7,6 +7,9 @@ from .views import (
     NotificationReadAllView,
     NotificationReadView,
     NotificationUnreadCountView,
+    PushSubscribeView,
+    PushUnsubscribeView,
+    PushVapidKeyView,
 )
 
 urlpatterns = [
@@ -25,5 +28,21 @@ urlpatterns = [
         "notifications/<int:pk>/read/",
         NotificationReadView.as_view(),
         name="notification-read",
+    ),
+    # Web Push
+    path(
+        "notifications/push/vapid-key/",
+        PushVapidKeyView.as_view(),
+        name="notification-push-vapid-key",
+    ),
+    path(
+        "notifications/push/subscribe/",
+        PushSubscribeView.as_view(),
+        name="notification-push-subscribe",
+    ),
+    path(
+        "notifications/push/unsubscribe/",
+        PushUnsubscribeView.as_view(),
+        name="notification-push-unsubscribe",
     ),
 ]

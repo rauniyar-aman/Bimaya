@@ -11,8 +11,13 @@ from rest_framework.generics import GenericAPIView, ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Notification
-from .serializers import NotificationSerializer
+from .models import Notification, PushSubscription
+from .push import push_enabled
+from .serializers import (
+    NotificationSerializer,
+    PushSubscribeSerializer,
+    PushUnsubscribeSerializer,
+)
 
 NOTIFICATION_TAG = ["notifications"]
 
@@ -81,3 +86,83 @@ class NotificationReadAllView(NotificationBase, GenericAPIView):
             read_at=timezone.now(), updated_at=timezone.now()
         )
         return Response({"updated": updated}, status=status.HTTP_200_OK)
+
+
+# --- Web Push -----------------------------------------------------------------
+# Browser push subscriptions are owned by the signed-in user; every view here is
+# scoped to ``request.user`` so one account can never touch another's devices.
+
+
+@extend_schema(
+    tags=NOTIFICATION_TAG,
+    summary="Whether Web Push is available, and the VAPID public key to use",
+    responses={
+        200: OpenApiResponse(description='{"enabled": <bool>, "public_key": <str>}')
+    },
+)
+class PushVapidKeyView(GenericAPIView):
+    """Tells the frontend if push is switched on and, if so, the public key to
+    subscribe with. Off by default → ``enabled: false`` and no key, so the
+    toggle can show a graceful "not available" state."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.conf import settings
+
+        enabled = push_enabled()
+        return Response(
+            {
+                "enabled": enabled,
+                "public_key": settings.VAPID_PUBLIC_KEY if enabled else "",
+            }
+        )
+
+
+@extend_schema(
+    tags=NOTIFICATION_TAG,
+    summary="Register (or refresh) a browser push subscription",
+    request=PushSubscribeSerializer,
+    responses={200: OpenApiResponse(description='{"subscribed": true}')},
+)
+class PushSubscribeView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PushSubscribeSerializer
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        # Upsert by endpoint: a browser reuses one endpoint per device, and it
+        # may re-subscribe (e.g. after a key rotation) — so keep a single row and
+        # re-home it to the current user with fresh keys.
+        PushSubscription.objects.update_or_create(
+            endpoint=data["endpoint"],
+            defaults={
+                "recipient": request.user,
+                "p256dh": data["keys"]["p256dh"],
+                "auth": data["keys"]["auth"],
+                "user_agent": request.META.get("HTTP_USER_AGENT", "")[:300],
+            },
+        )
+        return Response({"subscribed": True}, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=NOTIFICATION_TAG,
+    summary="Remove a browser push subscription",
+    request=PushUnsubscribeSerializer,
+    responses={200: OpenApiResponse(description='{"unsubscribed": true}')},
+)
+class PushUnsubscribeView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PushUnsubscribeSerializer
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # Scope the delete to the caller's own subscriptions.
+        PushSubscription.objects.filter(
+            recipient=request.user, endpoint=serializer.validated_data["endpoint"]
+        ).delete()
+        return Response({"unsubscribed": True}, status=status.HTTP_200_OK)

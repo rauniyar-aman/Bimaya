@@ -154,6 +154,14 @@ export interface ProviderLeadInput {
   message?: string;
 }
 
+/** Public enquiry from the "Contact" page — no company. */
+export interface ContactLeadInput {
+  contact_name: string;
+  email: string;
+  phone?: string;
+  message?: string;
+}
+
 export interface MessageResponse {
   detail: string;
   /** Development only: the OTP, since there is no SMS gateway locally. */
@@ -308,6 +316,8 @@ export interface ProviderProfile {
   support_phone: string;
   kyc_status: KycStatus;
   is_approved: boolean;
+  /** Platform commission percent on each sale — set by admins, read-only here. */
+  commission_rate: string;
   /** The signed-in user's role here — drives which write actions the UI shows. */
   my_role: ProviderRole | null;
   created_at: string;
@@ -473,6 +483,26 @@ export interface ProviderPurchaseListParams {
   page?: number;
 }
 
+/** A provider's own payout row: the commission split on one issued sale. */
+export interface ProviderPayout {
+  id: number;
+  policy_name: string;
+  policy_number: string | null;
+  gross_amount: string;
+  commission_rate: string;
+  commission_amount: string;
+  net_amount: string;
+  status: PayoutStatus;
+  paid_at: string | null;
+  created_at: string;
+}
+
+export interface ProviderPayoutListParams {
+  status?: PayoutStatus;
+  search?: string;
+  page?: number;
+}
+
 export interface PaymentInitiateInput {
   policy_purchase_id: number;
   gateway: PaymentGateway;
@@ -611,6 +641,17 @@ export interface AppNotification {
   created_at: string;
 }
 
+/**
+ * Whether browser push is switched on server-side, and the VAPID public key to
+ * subscribe with. `enabled` is false (and the key blank) until an admin turns
+ * push on and configures a keypair — the toggle uses this to show a graceful
+ * "not available yet" state rather than failing.
+ */
+export interface PushKeyInfo {
+  enabled: boolean;
+  public_key: string;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Admin-panel shapes                                                         */
 /* -------------------------------------------------------------------------- */
@@ -628,6 +669,7 @@ export interface AdminProvider {
   support_phone: string;
   kyc_status: KycStatus;
   is_approved: boolean;
+  commission_rate: string;
   owner_email: string;
   owner_name: string;
   policy_count: number;
@@ -690,6 +732,30 @@ export interface AdminPolicy extends PolicySummary {
 export interface AdminPurchase extends PolicyPurchase {
   customer_email: string;
   customer_name: string;
+}
+
+/** What a provider is owed for an issued policy, net of platform commission. */
+export type PayoutStatus = "PENDING" | "PAID";
+
+export interface AdminPayout {
+  id: number;
+  provider_name: string;
+  policy_name: string;
+  policy_number: string | null;
+  gross_amount: string;
+  commission_rate: string;
+  commission_amount: string;
+  net_amount: string;
+  status: PayoutStatus;
+  paid_at: string | null;
+  created_at: string;
+}
+
+export interface AdminPayoutListParams {
+  status?: PayoutStatus;
+  provider?: number;
+  search?: string;
+  page?: number;
 }
 
 export interface AdminProviderListParams {
@@ -895,10 +961,15 @@ export const api = {
       }),
   },
 
-  /** Public provider onboarding enquiry — no token, submitted from `/for-providers`. */
+  /** Public enquiries — no token. Provider onboarding and contact messages. */
   leads: {
     create: (payload: ProviderLeadInput) =>
       apiFetch<MessageResponse>("/provider-leads/", {
+        method: "POST",
+        json: payload,
+      }),
+    contact: (payload: ContactLeadInput) =>
+      apiFetch<MessageResponse>("/contact-enquiries/", {
         method: "POST",
         json: payload,
       }),
@@ -1035,6 +1106,12 @@ export const api = {
     listPurchases: (authFetch: AuthFetch, params: ProviderPurchaseListParams = {}) =>
       authFetch<Paginated<ProviderPurchase>>(
         `/provider/purchases/${toQuery(params as Record<string, unknown>)}`,
+      ),
+
+    /** This provider's commission payouts (read-only ledger), newest first. */
+    listPayouts: (authFetch: AuthFetch, params: ProviderPayoutListParams = {}) =>
+      authFetch<Paginated<ProviderPayout>>(
+        `/provider/payouts/${toQuery(params as Record<string, unknown>)}`,
       ),
 
     /** Purchases forwarded to this provider, waiting for a policy number. */
@@ -1209,6 +1286,26 @@ export const api = {
 
     markAllRead: (authFetch: AuthFetch) =>
       authFetch<{ updated: number }>("/notifications/read-all/", { method: "POST" }),
+
+    /** Whether browser push is on, plus the VAPID public key to subscribe with. */
+    pushVapidKey: (authFetch: AuthFetch) =>
+      authFetch<PushKeyInfo>("/notifications/push/vapid-key/"),
+
+    /**
+     * Register this browser's push subscription. Send the browser's own
+     * `PushSubscription.toJSON()` — the backend reads `endpoint` and `keys`.
+     */
+    subscribePush: (authFetch: AuthFetch, subscription: PushSubscriptionJSON) =>
+      authFetch<{ subscribed: boolean }>("/notifications/push/subscribe/", {
+        method: "POST",
+        json: subscription,
+      }),
+
+    unsubscribePush: (authFetch: AuthFetch, endpoint: string) =>
+      authFetch<{ unsubscribed: boolean }>("/notifications/push/unsubscribe/", {
+        method: "POST",
+        json: { endpoint },
+      }),
   },
 
   /**
@@ -1234,6 +1331,13 @@ export const api = {
     revokeProvider: (authFetch: AuthFetch, id: number) =>
       authFetch<AdminProvider>(`/admin/providers/${id}/revoke/`, {
         method: "POST",
+      }),
+
+    /** Set the platform commission percent charged on a provider's sales (0–100). */
+    setProviderCommission: (authFetch: AuthFetch, id: number, rate: string) =>
+      authFetch<AdminProvider>(`/admin/providers/${id}/commission/`, {
+        method: "POST",
+        json: { commission_rate: rate },
       }),
 
     /* Provider team members — the owner (read-only here) plus added staff/viewers */
@@ -1304,6 +1408,12 @@ export const api = {
         method: "POST",
       }),
 
+    /* Provider payouts (commission ledger) */
+    listPayouts: (authFetch: AuthFetch, params: AdminPayoutListParams = {}) =>
+      authFetch<Paginated<AdminPayout>>(
+        `/admin/payouts/${toQuery(params as Record<string, unknown>)}`,
+      ),
+
     /* Users */
     listUsers: (authFetch: AuthFetch, params: AdminUserListParams = {}) =>
       authFetch<Paginated<AdminUser>>(
@@ -1361,6 +1471,12 @@ export const api = {
     exportPurchases: (authFetch: AuthFetch, params: AdminPurchaseListParams = {}) =>
       authFetch<Blob>(
         `/admin/reports/purchases/${toQuery(params as Record<string, unknown>)}`,
+        { blob: true },
+      ),
+
+    exportPayouts: (authFetch: AuthFetch, params: AdminPayoutListParams = {}) =>
+      authFetch<Blob>(
+        `/admin/reports/payouts/${toQuery(params as Record<string, unknown>)}`,
         { blob: true },
       ),
 

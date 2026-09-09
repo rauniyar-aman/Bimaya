@@ -78,3 +78,31 @@ class Notification(TimeStampedModel):
         if self.read_at is None:
             self.read_at = timezone.now()
             self.save(update_fields=["read_at", "updated_at"])
+
+
+class PushSubscription(TimeStampedModel):
+    """A browser Web Push subscription for one of a user's devices.
+
+    The browser's Push API hands the frontend an opaque subscription — an
+    ``endpoint`` URL plus the two keys (``p256dh``, ``auth``) needed to encrypt
+    payloads for it. We store one row per subscription so a user can receive
+    push on several devices, and prune rows the push service later rejects as
+    gone (see :mod:`apps.notifications.push`). No message content is stored
+    here; this is only the delivery address.
+    """
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="push_subscriptions",
+    )
+    endpoint = models.URLField(max_length=500, unique=True)
+    p256dh = models.CharField(max_length=200)
+    auth = models.CharField(max_length=100)
+    user_agent = models.CharField(max_length=300, blank=True)
+
+    class Meta(TimeStampedModel.Meta):
+        indexes = [models.Index(fields=["recipient"])]
+
+    def __str__(self):
+        return f"{self.recipient.email} · {self.endpoint[:40]}…"

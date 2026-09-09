@@ -41,3 +41,9 @@ export const POLICY_FILTERS = [
   { value: "APPROVED", label: "Approved" },
   { value: "INACTIVE", label: "Inactive" },
 ];
+
+export const PAYOUT_FILTERS = [
+  { value: "", label: "All payouts" },
+  { value: "PENDING", label: "Pending" },
+  { value: "PAID", label: "Paid" },
+];

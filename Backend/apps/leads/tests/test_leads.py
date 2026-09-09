@@ -77,3 +77,52 @@ class ProviderLeadCreateTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(ProviderLead.objects.get().status, ProviderLead.Status.NEW)
+
+    def test_provider_lead_is_kind_provider(self):
+        self.client.post(self.url, self._payload(), format="json")
+        self.assertEqual(ProviderLead.objects.get().kind, ProviderLead.Kind.PROVIDER)
+
+
+@no_throttle
+class ContactLeadCreateTests(APITestCase):
+    def setUp(self):
+        self.url = reverse("contact-lead-create")
+
+    def _payload(self, **overrides):
+        payload = {
+            "contact_name": "Priya Karki",
+            "email": "priya@example.test",
+            "phone": "9811111111",
+            "message": "How do I renew my health policy?",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_submit_contact_creates_record(self):
+        response = self.client.post(self.url, self._payload(), format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("detail", response.data)
+        lead = ProviderLead.objects.get()
+        self.assertEqual(lead.kind, ProviderLead.Kind.CONTACT)
+        self.assertEqual(lead.contact_name, "Priya Karki")
+        self.assertEqual(lead.company_name, "")
+        self.assertEqual(lead.status, ProviderLead.Status.NEW)
+
+    def test_contact_needs_no_company(self):
+        response = self.client.post(self.url, self._payload(), format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_contact_notifies_admin(self):
+        self.client.post(self.url, self._payload(), format="json")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("contact enquiry", mail.outbox[0].subject.lower())
+
+    def test_contact_endpoint_needs_no_auth(self):
+        response = self.client.post(self.url, self._payload(), format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_invalid_email_is_rejected(self):
+        response = self.client.post(
+            self.url, self._payload(email="not-an-email"), format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

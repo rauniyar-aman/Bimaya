@@ -1,6 +1,6 @@
 from django.contrib import admin, messages
 
-from .models import PolicyPurchase
+from .models import PolicyPurchase, ProviderPayout
 
 
 @admin.register(PolicyPurchase)
@@ -47,3 +47,44 @@ class PolicyPurchaseAdmin(admin.ModelAdmin):
         self.message_user(request, f"{updated} purchase(s) marked cancelled.")
 
     actions = ["verify_and_forward", "mark_cancelled"]
+
+
+@admin.register(ProviderPayout)
+class ProviderPayoutAdmin(admin.ModelAdmin):
+    list_display = (
+        "provider",
+        "purchase",
+        "gross_amount",
+        "commission_rate",
+        "commission_amount",
+        "net_amount",
+        "status",
+        "paid_at",
+    )
+    list_filter = ("status", "provider")
+    search_fields = (
+        "provider__company_name",
+        "purchase__policy__name",
+        "purchase__policy_number",
+    )
+    readonly_fields = (
+        "purchase",
+        "provider",
+        "gross_amount",
+        "commission_rate",
+        "commission_amount",
+        "net_amount",
+        "paid_at",
+        "created_at",
+        "updated_at",
+    )
+
+    @admin.action(description="Mark selected payouts as paid")
+    def mark_paid(self, request, queryset):
+        paid = 0
+        for payout in queryset.exclude(status=ProviderPayout.Status.PAID):
+            payout.mark_paid()
+            paid += 1
+        self.message_user(request, f"{paid} payout(s) marked paid.")
+
+    actions = ["mark_paid"]

@@ -2,24 +2,26 @@
 
 Every notification is created by an **explicit call** from a business
 transition point (there are no signals). :func:`notify` writes the in-app row
-and fans out to the side channels: email (best-effort) and SMS (a pluggable
-adapter that is off by default). The typed ``notify_*`` helpers build the copy
-for each event so call sites stay one-liners and wording lives in one place.
+and fans out to the side channels: email (best-effort), SMS and Web Push (both
+pluggable adapters that are off by default). The typed ``notify_*`` helpers
+build the copy for each event so call sites stay one-liners and wording lives
+in one place.
 
-Delivery never breaks the caller: email uses ``fail_silently`` and SMS swallows
-its own errors, so a mail/SMS outage cannot roll back a payment or a claim
-decision.
+Delivery never breaks the caller: email uses ``fail_silently``, and SMS and
+push swallow their own errors, so a mail/SMS/push outage cannot roll back a
+payment or a claim decision.
 """
 
 from django.conf import settings
 from django.core.mail import send_mail
 
 from .models import Notification
+from .push import send_push
 from .sms import send_sms
 
 
-def notify(recipient, type, title, body="", url="", email=True, sms=True):
-    """Create an in-app notification and fan out to email + SMS.
+def notify(recipient, type, title, body="", url="", email=True, sms=True, push=True):
+    """Create an in-app notification and fan out to email, SMS + Web Push.
 
     Returns the created :class:`~apps.notifications.models.Notification`.
     """
@@ -30,6 +32,8 @@ def notify(recipient, type, title, body="", url="", email=True, sms=True):
         _send_email(recipient.email, title, body)
     if sms and getattr(recipient, "phone", ""):
         send_sms(recipient.phone, f"{title} — {body}" if body else title)
+    if push:
+        send_push(recipient, title, body, url)
     return notification
 
 

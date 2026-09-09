@@ -29,6 +29,7 @@ const STAT_META: Record<string, { icon: ReactNode; tone: StatTone }> = {
   active: { icon: <BadgeCheckIcon className="h-5 w-5" />, tone: "success" },
   claims: { icon: <ShieldCheckIcon className="h-5 w-5" />, tone: "brand" },
   premium: { icon: <WalletIcon className="h-5 w-5" />, tone: "success" },
+  commission: { icon: <WalletIcon className="h-5 w-5" />, tone: "brand" },
   settled: { icon: <WalletIcon className="h-5 w-5" />, tone: "accent" },
 };
 

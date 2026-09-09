@@ -1,6 +1,7 @@
 import type { StatusVariant } from "@/components/ui/status-pill";
 import type {
   KycStatus,
+  PayoutStatus,
   PolicyStatus,
   PurchaseStatus,
   UserRole,
@@ -42,4 +43,13 @@ export const ROLE_META: Record<UserRole, { variant: StatusVariant; label: string
   CUSTOMER: { variant: "info", label: "Customer" },
   PROVIDER: { variant: "pending", label: "Provider" },
   ADMIN: { variant: "active", label: "Admin" },
+};
+
+/** Status-pill variant + label for a provider payout's settlement state. */
+export const PAYOUT_STATUS_META: Record<
+  PayoutStatus,
+  { variant: StatusVariant; label: string }
+> = {
+  PENDING: { variant: "pending", label: "Pending" },
+  PAID: { variant: "active", label: "Paid" },
 };

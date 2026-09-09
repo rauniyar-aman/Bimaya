@@ -15,7 +15,7 @@ from apps.payments.models import Payment
 from apps.policies.models import InsuranceCategory, Policy
 from apps.providers.models import Provider
 
-from ..models import PolicyPurchase
+from ..models import PolicyPurchase, ProviderPayout
 
 User = get_user_model()
 
@@ -284,6 +284,73 @@ class PurchaseStateMachineTests(APITestCase):
         self.assertIsNotNone(self.purchase.end_date)
 
 
+class ProviderPayoutTests(APITestCase):
+    """Commission accounting: a payout is created when a policy is issued."""
+
+    def setUp(self):
+        self.category = InsuranceCategory.objects.create(name="Life")
+        self.provider = make_provider()  # default commission_rate = 10.00
+        self.policy = make_policy(
+            self.provider, self.category, premium=Decimal("10000.00")
+        )
+        self.customer = make_customer()
+
+    def _issue(self):
+        purchase = PolicyPurchase.objects.create(
+            customer=self.customer,
+            policy=self.policy,
+            kyc=make_self_kyc(self.customer),
+            nominee_name="Sita Sharma",
+            nominee_relationship="Spouse",
+            nominee_contact="9800000000",
+            status=PolicyPurchase.Status.FORWARDED,
+        )
+        purchase.issue("NLI-2026-0100")
+        return purchase
+
+    def test_payout_created_on_issue_with_correct_amounts(self):
+        purchase = self._issue()
+        payout = ProviderPayout.objects.get(purchase=purchase)
+        self.assertEqual(payout.provider, self.provider)
+        self.assertEqual(payout.gross_amount, Decimal("10000.00"))
+        self.assertEqual(payout.commission_rate, Decimal("10.00"))
+        self.assertEqual(payout.commission_amount, Decimal("1000.00"))
+        self.assertEqual(payout.net_amount, Decimal("9000.00"))
+        self.assertEqual(payout.status, ProviderPayout.Status.PENDING)
+
+    def test_payout_is_idempotent(self):
+        purchase = self._issue()
+        # A second call must not create a duplicate payout.
+        ProviderPayout.create_for_purchase(purchase)
+        self.assertEqual(ProviderPayout.objects.filter(purchase=purchase).count(), 1)
+
+    def test_rate_is_snapshotted_at_issuance(self):
+        purchase = self._issue()
+        payout = ProviderPayout.objects.get(purchase=purchase)
+        # Changing the provider's rate later must not rewrite history.
+        self.provider.commission_rate = Decimal("25.00")
+        self.provider.save(update_fields=["commission_rate"])
+        payout.refresh_from_db()
+        self.assertEqual(payout.commission_rate, Decimal("10.00"))
+        self.assertEqual(payout.commission_amount, Decimal("1000.00"))
+
+    def test_custom_rate_is_applied(self):
+        self.provider.commission_rate = Decimal("12.50")
+        self.provider.save(update_fields=["commission_rate"])
+        purchase = self._issue()
+        payout = ProviderPayout.objects.get(purchase=purchase)
+        self.assertEqual(payout.commission_amount, Decimal("1250.00"))
+        self.assertEqual(payout.net_amount, Decimal("8750.00"))
+
+    def test_mark_paid_sets_status_and_timestamp(self):
+        purchase = self._issue()
+        payout = ProviderPayout.objects.get(purchase=purchase)
+        payout.mark_paid()
+        payout.refresh_from_db()
+        self.assertEqual(payout.status, ProviderPayout.Status.PAID)
+        self.assertIsNotNone(payout.paid_at)
+
+
 @no_throttle
 class ProviderIssuanceTests(APITestCase):
     def setUp(self):
@@ -437,6 +504,79 @@ class ProviderPurchaseListTests(APITestCase):
         self.client.force_authenticate(self.customer)
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+@no_throttle
+class ProviderPayoutListTests(APITestCase):
+    """The provider's read-only payout ledger, scoped to their own sales."""
+
+    def setUp(self):
+        self.category = InsuranceCategory.objects.create(name="Life")
+        self.provider = make_provider()
+        self.policy = make_policy(self.provider, self.category)
+        self.customer = make_customer()
+        self.mine = self._issue(self.policy, "NLI-PAYOUT-1")
+        self.url = reverse("provider-payout-list")
+
+    def _issue(self, policy, number):
+        # ``issue`` only needs a FORWARDED purchase; issuance creates the payout.
+        purchase = PolicyPurchase.objects.create(
+            customer=self.customer,
+            policy=policy,
+            nominee_name="Sita Sharma",
+            nominee_relationship="Spouse",
+            nominee_contact="9800000000",
+            status=PolicyPurchase.Status.FORWARDED,
+        )
+        purchase.issue(number)
+        return purchase
+
+    def test_lists_own_payouts_with_amounts(self):
+        self.client.force_authenticate(self.provider.user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        row = response.data["results"][0]
+        self.assertEqual(row["policy_name"], self.policy.name)
+        self.assertEqual(row["policy_number"], "NLI-PAYOUT-1")
+        self.assertEqual(row["gross_amount"], "10000.00")
+        self.assertEqual(row["commission_amount"], "1000.00")
+        self.assertEqual(row["net_amount"], "9000.00")
+        self.assertEqual(row["status"], ProviderPayout.Status.PENDING)
+        # No cross-provider PII (no provider name / customer details on the row).
+        self.assertNotIn("provider_name", row)
+
+    def test_excludes_other_providers_payouts(self):
+        rival = make_provider("rival@bimaya.test", "Rival Co")
+        rival_policy = make_policy(rival, self.category, name="Rival Plan")
+        PolicyPurchase.objects.create(
+            customer=make_customer("c2@bimaya.test"),
+            policy=rival_policy,
+            nominee_name="X",
+            nominee_relationship="Y",
+            nominee_contact="9800000002",
+            status=PolicyPurchase.Status.FORWARDED,
+        ).issue("RIV-PAYOUT-1")
+        self.client.force_authenticate(self.provider.user)
+        response = self.client.get(self.url)
+        numbers = {row["policy_number"] for row in response.data["results"]}
+        self.assertEqual(numbers, {"NLI-PAYOUT-1"})
+
+    def test_status_filter(self):
+        payout = ProviderPayout.objects.get(purchase=self.mine)
+        payout.mark_paid()
+        self.client.force_authenticate(self.provider.user)
+        response = self.client.get(self.url, {"status": ProviderPayout.Status.PENDING})
+        self.assertEqual(response.data["count"], 0)
+
+    def test_customer_forbidden(self):
+        self.client.force_authenticate(self.customer)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_anonymous_unauthorized(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 @no_throttle

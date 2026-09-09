@@ -1,4 +1,5 @@
 import calendar
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.db import models
@@ -6,6 +7,7 @@ from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
 from apps.policies.models import Policy
+from apps.providers.models import Provider
 
 
 def _add_months(start, months):
@@ -118,3 +120,90 @@ class PolicyPurchase(TimeStampedModel):
                 "updated_at",
             ]
         )
+        ProviderPayout.create_for_purchase(self)
+
+
+def _quantize_money(value):
+    """Round a money amount to 2 decimal places (banker's-safe half-up)."""
+    return Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+class ProviderPayout(TimeStampedModel):
+    """What a provider is owed for an issued policy, net of platform commission.
+
+    A payout row is created once, when a purchase is issued and becomes
+    ``ACTIVE`` (see :meth:`PolicyPurchase.issue`). The commission rate is
+    **snapshotted** from the provider at that moment, so a later change to the
+    provider's rate never rewrites the history of past sales. It starts
+    ``PENDING`` and an administrator marks it ``PAID`` once the provider has been
+    settled out-of-band — there is no automated bank disbursement.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        PAID = "PAID", "Paid"
+
+    purchase = models.OneToOneField(
+        PolicyPurchase, on_delete=models.CASCADE, related_name="payout"
+    )
+    provider = models.ForeignKey(
+        Provider, on_delete=models.PROTECT, related_name="payouts"
+    )
+    gross_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, help_text="Premium collected on the sale."
+    )
+    commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        help_text="Commission percent snapshotted from the provider at issuance.",
+    )
+    commission_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    net_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, help_text="Gross minus commission."
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(TimeStampedModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=["purchase"], name="one_payout_per_purchase"
+            )
+        ]
+        indexes = [models.Index(fields=["status"])]
+
+    def __str__(self):
+        return f"{self.provider.company_name} · {self.net_amount} · {self.status}"
+
+    @classmethod
+    def create_for_purchase(cls, purchase):
+        """Create the payout for a just-issued purchase, once.
+
+        Idempotent: the one-payout-per-purchase constraint plus this guard mean
+        re-issuing or a retried call never doubles a payout. The rate is read
+        from the provider now and stored, so it is immune to later rate changes.
+        """
+        provider = purchase.policy.provider
+        rate = provider.commission_rate
+        gross = _quantize_money(purchase.policy.premium)
+        commission = _quantize_money(gross * rate / Decimal("100"))
+        net = gross - commission
+        payout, _ = cls.objects.get_or_create(
+            purchase=purchase,
+            defaults={
+                "provider": provider,
+                "gross_amount": gross,
+                "commission_rate": rate,
+                "commission_amount": commission,
+                "net_amount": net,
+            },
+        )
+        return payout
+
+    def mark_paid(self):
+        if self.status != self.Status.PAID:
+            self.status = self.Status.PAID
+            self.paid_at = timezone.now()
+            self.save(update_fields=["status", "paid_at", "updated_at"])

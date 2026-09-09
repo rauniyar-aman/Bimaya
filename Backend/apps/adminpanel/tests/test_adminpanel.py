@@ -11,6 +11,7 @@ touched; ``tearDownModule`` removes it.
 
 import csv
 import io
+import json
 import shutil
 import tempfile
 from decimal import Decimal
@@ -18,6 +19,7 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -25,6 +27,7 @@ from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.adminpanel import gov_integration
 from apps.documents.models import CustomerKyc
 from apps.notifications.models import Notification
 from apps.payments.models import Payment
@@ -37,6 +40,13 @@ User = get_user_model()
 no_throttle = mock.patch(
     "rest_framework.throttling.SimpleRateThrottle.allow_request",
     new=lambda self, request, view: True,
+)
+
+# Switches the (otherwise dormant) government registry seam fully on.
+gov_on = override_settings(
+    GOV_INTEGRATION_ENABLED=True,
+    GOV_INTEGRATION_ENDPOINT="https://registry.gov.test/policies",
+    GOV_INTEGRATION_API_KEY="test-key",
 )
 
 _MEDIA_ROOT = tempfile.mkdtemp(prefix="bimaya-adminpanel-tests-")
@@ -203,6 +213,27 @@ class AdminProviderTests(APITestCase):
         self.assertFalse(response.data["is_approved"])
         self.provider.refresh_from_db()
         self.assertFalse(self.provider.is_approved)
+
+    def test_set_commission_rate(self):
+        response = self.client.post(
+            reverse("admin-provider-commission", args=[self.provider.id]),
+            {"commission_rate": "12.50"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["commission_rate"], "12.50")
+        self.provider.refresh_from_db()
+        self.assertEqual(self.provider.commission_rate, Decimal("12.50"))
+
+    def test_commission_rate_rejects_out_of_range(self):
+        response = self.client.post(
+            reverse("admin-provider-commission", args=[self.provider.id]),
+            {"commission_rate": "150"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.provider.refresh_from_db()
+        self.assertEqual(self.provider.commission_rate, Decimal("10.00"))
 
 
 @no_throttle
@@ -700,6 +731,25 @@ class AdminReportExportTests(APITestCase):
         self.assertEqual(rows[1][2], self.policy.name)
         self.assertEqual(rows[1][5], self.customer.email)
 
+    def test_payouts_report_reflects_an_issued_purchase(self):
+        purchase = make_purchase(
+            self.customer, self.policy, status=PolicyPurchase.Status.FORWARDED
+        )
+        purchase.issue("NLI-REPORT-1")
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(reverse("admin-report-payouts"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn(
+            'attachment; filename="bimaya-payouts-',
+            response["Content-Disposition"],
+        )
+        rows = self._rows(response)
+        self.assertEqual(rows[0][:2], ["ID", "Provider"])
+        self.assertEqual(len(rows), 2)  # header + one payout
+        self.assertEqual(rows[1][1], self.provider.company_name)
+        self.assertEqual(rows[1][6], "1000.00")  # commission (10% of 10000)
+        self.assertEqual(rows[1][7], "9000.00")  # net payable
+
 
 @no_throttle
 @override_settings(MEDIA_ROOT=_MEDIA_ROOT)
@@ -769,3 +819,104 @@ class AdminAnalyticsTests(APITestCase):
         current = data["monthly"][-1]  # oldest-first, so the last is this month
         self.assertEqual(current["purchases"], 2)
         self.assertEqual(current["premium"], "12000.00")
+
+    def test_commission_earned_reflects_issued_payouts(self):
+        purchase = make_purchase(
+            self.customer, self.policy, status=PolicyPurchase.Status.FORWARDED
+        )
+        purchase.issue("NLI-ANALYTICS-1")  # 10% of 10000 = 1000 commission
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(self.url)
+        stats = {s["key"]: s for s in response.data["stats"]}
+        self.assertEqual(stats["commission"]["value"], "1000.00")
+        self.assertEqual(stats["commission"]["format"], "currency")
+
+
+@override_settings(MEDIA_ROOT=_MEDIA_ROOT)
+class GovIntegrationSeamTests(APITestCase):
+    """The government registry sync: dormant by default, non-PII when on.
+
+    The seam only reports issued (ACTIVE) policies, only via the
+    ``sync_gov_registry`` command, and only when switched on with an endpoint and
+    key. When off it is a clean no-op. When on it POSTs a summary that carries
+    regulatory metadata but never customer identity, nominee details or KYC.
+    """
+
+    def setUp(self):
+        self.category = InsuranceCategory.objects.create(name="Vehicle")
+        self.provider = make_provider(approved=True)
+        self.provider.registration_number = "REG-GOV-77"
+        self.provider.save(update_fields=["registration_number"])
+        self.policy = make_policy(self.provider, self.category)
+        self.customer = make_customer()
+        self.purchase = make_purchase(
+            self.customer, self.policy, status=PolicyPurchase.Status.FORWARDED
+        )
+        self.purchase.issue("NLI-GOV-1")
+
+    # --- dormant by default --------------------------------------------------
+    def test_disabled_by_default(self):
+        self.assertFalse(gov_integration.gov_enabled())
+
+    def test_report_policy_is_a_noop_when_disabled(self):
+        with mock.patch("requests.post") as post:
+            result = gov_integration.report_policy(self.purchase)
+        self.assertEqual(result["status"], "disabled")
+        post.assert_not_called()
+
+    def test_report_batch_is_all_disabled_when_off(self):
+        result = gov_integration.report_batch(PolicyPurchase.objects.active())
+        self.assertEqual(result, {"sent": 0, "error": 0, "disabled": 1})
+
+    def test_command_runs_clean_when_disabled(self):
+        out = io.StringIO()
+        with mock.patch("requests.post") as post:
+            call_command("sync_gov_registry", stdout=out)
+        self.assertIn("disabled", out.getvalue().lower())
+        post.assert_not_called()
+
+    # --- the payload never carries PII --------------------------------------
+    def test_policy_summary_excludes_customer_pii(self):
+        summary = gov_integration.policy_summary(self.purchase)
+        # Regulatory metadata is present…
+        self.assertEqual(summary["policy_number"], "NLI-GOV-1")
+        self.assertEqual(summary["plan"], self.policy.name)
+        self.assertEqual(summary["provider"], self.provider.company_name)
+        self.assertEqual(summary["provider_registration_number"], "REG-GOV-77")
+        # …and nothing identifying the customer leaks in — by value or by key.
+        blob = json.dumps(summary)
+        self.assertNotIn(self.customer.email, blob)
+        self.assertNotIn(self.purchase.nominee_name, blob)
+        self.assertNotIn(self.purchase.nominee_contact, blob)
+        keys = " ".join(summary).lower()
+        for banned in ("email", "customer", "nominee", "kyc"):
+            self.assertNotIn(banned, keys)
+
+    # --- switched on (transport mocked — no real network call) --------------
+    @gov_on
+    def test_report_policy_posts_non_pii_summary_when_enabled(self):
+        with mock.patch("requests.post") as post:
+            result = gov_integration.report_policy(self.purchase)
+        self.assertEqual(result["status"], "sent")
+        post.assert_called_once()
+        args, kwargs = post.call_args
+        self.assertEqual(args[0], "https://registry.gov.test/policies")
+        self.assertEqual(kwargs["json"], gov_integration.policy_summary(self.purchase))
+        self.assertEqual(kwargs["headers"]["Authorization"], "Bearer test-key")
+        blob = json.dumps(kwargs["json"])
+        self.assertNotIn(self.customer.email, blob)
+        self.assertNotIn(self.purchase.nominee_name, blob)
+
+    @gov_on
+    def test_report_policy_never_raises_on_provider_error(self):
+        with mock.patch("requests.post", side_effect=RuntimeError("registry down")):
+            result = gov_integration.report_policy(self.purchase)
+        self.assertEqual(result["status"], "error")
+
+    @gov_on
+    def test_command_reports_active_purchases_when_enabled(self):
+        out = io.StringIO()
+        with mock.patch("requests.post") as post:
+            call_command("sync_gov_registry", stdout=out)
+        post.assert_called_once()
+        self.assertIn("1 sent", out.getvalue())

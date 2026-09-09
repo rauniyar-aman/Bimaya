@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
@@ -39,6 +41,13 @@ class Provider(TimeStampedModel):
     is_approved = models.BooleanField(
         default=False,
         help_text="Approved providers may have their policies published.",
+    )
+    commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("10.00"),
+        help_text="Platform commission percent charged on each sale of this "
+        "provider's policies.",
     )
 
     class Meta(TimeStampedModel.Meta):

@@ -12,3 +12,4 @@ reportlab>=5
 requests>=2.34
 argon2-cffi>=25
 google-genai>=1.0
+pywebpush>=2.0

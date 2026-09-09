@@ -42,6 +42,12 @@ export function ProviderApprovals() {
 
   const [members, setMembers] = useState<AdminProvider | null>(null);
 
+  // Commission-rate editor
+  const [commissionFor, setCommissionFor] = useState<AdminProvider | null>(null);
+  const [rateInput, setRateInput] = useState("");
+  const [savingRate, setSavingRate] = useState(false);
+  const [rateError, setRateError] = useState("");
+
   useEffect(() => {
     let cancelled = false;
     api.admin
@@ -92,6 +98,31 @@ export function ProviderApprovals() {
       setActionError(errorMessage(error, "Could not update this provider."));
     } finally {
       setWorking(false);
+    }
+  }
+
+  function openCommission(provider: AdminProvider) {
+    setRateError("");
+    setRateInput(provider.commission_rate);
+    setCommissionFor(provider);
+  }
+
+  async function saveCommission() {
+    if (!commissionFor) return;
+    setSavingRate(true);
+    setRateError("");
+    try {
+      const updated = await api.admin.setProviderCommission(
+        authFetch,
+        commissionFor.id,
+        rateInput.trim(),
+      );
+      updateRow(updated);
+      setCommissionFor(null);
+    } catch (error) {
+      setRateError(errorMessage(error, "Enter a rate between 0 and 100."));
+    } finally {
+      setSavingRate(false);
     }
   }
 
@@ -165,6 +196,7 @@ export function ProviderApprovals() {
                 <TH>Owner</TH>
                 <TH>KYC</TH>
                 <TH className="text-center">Policies</TH>
+                <TH className="text-center">Commission</TH>
                 <TH>Status</TH>
                 <TH className="text-right">Action</TH>
               </TR>
@@ -190,6 +222,9 @@ export function ProviderApprovals() {
                       <StatusPill status={kyc.variant}>{kyc.label}</StatusPill>
                     </TD>
                     <TD className="text-center">{provider.policy_count}</TD>
+                    <TD className="text-center tabular-nums">
+                      {provider.commission_rate}%
+                    </TD>
                     <TD>
                       <StatusPill status={provider.is_approved ? "active" : "pending"}>
                         {provider.is_approved ? "Approved" : "Awaiting"}
@@ -203,6 +238,13 @@ export function ProviderApprovals() {
                           onClick={() => setMembers(provider)}
                         >
                           Team
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => openCommission(provider)}
+                        >
+                          Rate
                         </Button>
                         {provider.is_approved ? (
                           <Button
@@ -293,6 +335,59 @@ export function ProviderApprovals() {
           onClose={() => setMembers(null)}
         />
       )}
+
+      <Modal
+        open={commissionFor !== null}
+        onClose={() => (savingRate ? undefined : setCommissionFor(null))}
+        title="Set commission rate"
+      >
+        {commissionFor && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              Platform commission charged on each sale of{" "}
+              <strong className="text-ink">{commissionFor.company_name}</strong>
+              &apos;s policies. This applies to future issuances only — existing
+              payouts keep the rate recorded when they were created.
+            </p>
+            <div>
+              <label
+                htmlFor="commission-rate"
+                className="mb-1 block text-sm font-medium text-ink"
+              >
+                Commission percent
+              </label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="commission-rate"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={rateInput}
+                  onChange={(e) => setRateInput(e.target.value)}
+                  className="w-32"
+                  aria-label="Commission percent"
+                />
+                <span className="text-muted">%</span>
+              </div>
+            </div>
+            {rateError && <Alert variant="error">{rateError}</Alert>}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setCommissionFor(null)}
+                disabled={savingRate}
+              >
+                Cancel
+              </Button>
+              <Button onClick={saveCommission} loading={savingRate}>
+                Save commission
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -4,7 +4,7 @@ from apps.documents.models import CustomerKyc
 from apps.policies.models import Policy
 from apps.policies.serializers import PolicyListSerializer
 
-from .models import PolicyPurchase
+from .models import PolicyPurchase, ProviderPayout
 
 
 class KycSummarySerializer(serializers.ModelSerializer):
@@ -120,4 +120,35 @@ class ProviderPurchaseSerializer(PolicyPurchaseSerializer):
 
     class Meta(PolicyPurchaseSerializer.Meta):
         fields = PolicyPurchaseSerializer.Meta.fields + ("customer_name",)
+        read_only_fields = fields
+
+
+class ProviderPayoutSerializer(serializers.ModelSerializer):
+    """A provider's own payout row: the commission split on one issued sale, and
+    whether Bimaya has settled it yet.
+
+    Scoped to the acting provider, so the provider name is implicit and left out.
+    Amounts serialize as strings (DRF's default for ``DecimalField``); the
+    frontend formats them.
+    """
+
+    policy_name = serializers.CharField(source="purchase.policy.name", read_only=True)
+    policy_number = serializers.CharField(
+        source="purchase.policy_number", read_only=True
+    )
+
+    class Meta:
+        model = ProviderPayout
+        fields = (
+            "id",
+            "policy_name",
+            "policy_number",
+            "gross_amount",
+            "commission_rate",
+            "commission_amount",
+            "net_amount",
+            "status",
+            "paid_at",
+            "created_at",
+        )
         read_only_fields = fields

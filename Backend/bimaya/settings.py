@@ -196,6 +196,21 @@ OTP_RETURN_IN_RESPONSE = env.bool("OTP_RETURN_IN_RESPONSE", default=DEBUG)
 # flip this on and wire a real gateway there to enable it.
 NOTIFICATIONS_SMS_ENABLED = env.bool("NOTIFICATIONS_SMS_ENABLED", default=False)
 
+# Web Push (browser notifications) is also off by default. It only activates
+# once it is enabled AND a VAPID keypair is configured — see
+# apps/notifications/push.py. The private key stays server-side; only the public
+# key is safe to ship to the browser (exposed to the frontend as
+# NEXT_PUBLIC_VAPID_PUBLIC_KEY). Generate a keypair with:
+#   python -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); \
+#     import base64; \
+#     print(base64.urlsafe_b64encode(v.public_key.public_bytes(...)))"
+# (or `vapid --gen`), then set the three values below in .env.
+NOTIFICATIONS_PUSH_ENABLED = env.bool("NOTIFICATIONS_PUSH_ENABLED", default=False)
+VAPID_PUBLIC_KEY = env("VAPID_PUBLIC_KEY", default="")
+VAPID_PRIVATE_KEY = env("VAPID_PRIVATE_KEY", default="")
+# "mailto:" contact the push service can reach you at (VAPID "sub" claim).
+VAPID_ADMIN_EMAIL = env("VAPID_ADMIN_EMAIL", default="admin@bimaya.local")
+
 # ---------------------------------------------------------------------------
 # AI chat assistant
 # ---------------------------------------------------------------------------
@@ -208,6 +223,20 @@ AI_CHAT_ENABLED = env.bool("AI_CHAT_ENABLED", default=False)
 AI_CHAT_PROVIDER = env("AI_CHAT_PROVIDER", default="gemini")
 GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
 GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-flash-latest")
+
+# ---------------------------------------------------------------------------
+# Government insurance registry sync (dormant seam)
+# ---------------------------------------------------------------------------
+# Nepal's insurance regulator may require issued policies to be reported to a
+# central registry. That integration is scaffolded but ships OFF: it only runs
+# when enabled AND an endpoint and key are configured (see
+# apps/adminpanel/gov_integration.py, driven by the `sync_gov_registry`
+# management command — never from the request path). Only non-PII regulatory
+# metadata is ever sent — policy numbers, plan/provider identifiers and amounts,
+# never customer identity, nominee details or KYC.
+GOV_INTEGRATION_ENABLED = env.bool("GOV_INTEGRATION_ENABLED", default=False)
+GOV_INTEGRATION_ENDPOINT = env("GOV_INTEGRATION_ENDPOINT", default="")
+GOV_INTEGRATION_API_KEY = env("GOV_INTEGRATION_API_KEY", default="")
 
 # ---------------------------------------------------------------------------
 # CORS (locked to the frontend origin)

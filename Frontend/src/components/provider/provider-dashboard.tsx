@@ -7,6 +7,7 @@ import { ClaimReviewQueue } from "@/components/provider/claim-review-queue";
 import { IssuanceQueue } from "@/components/provider/issuance-queue";
 import { PolicyRow } from "@/components/provider/policy-row";
 import { ProviderAnalyticsSection } from "@/components/provider/provider-analytics";
+import { ProviderPayouts } from "@/components/provider/provider-payouts";
 import { ProviderSales } from "@/components/provider/provider-sales";
 import { Container } from "@/components/layout/container";
 import { Alert } from "@/components/ui/alert";
@@ -134,6 +135,7 @@ export function ProviderDashboard() {
               <IssuanceQueue canWrite={canWrite} />
               <ClaimReviewQueue canWrite={canWrite} />
               <ProviderSales />
+              <ProviderPayouts />
             </>
           )}
         </div>
@@ -202,6 +204,13 @@ function ProfileSection({ profile }: { profile: ProviderProfile | null }) {
               </StatusPill>
               <StatusPill status={kyc.variant}>{kyc.label}</StatusPill>
             </div>
+            <p className="mt-2 text-sm text-muted">
+              Platform commission:{" "}
+              <span className="font-medium text-ink">
+                {profile.commission_rate}%
+              </span>{" "}
+              on each sale
+            </p>
           </div>
         </div>
         <Link

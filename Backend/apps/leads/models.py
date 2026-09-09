@@ -4,13 +4,18 @@ from apps.core.models import TimeStampedModel
 
 
 class ProviderLead(TimeStampedModel):
-    """An enquiry from an insurance company that wants to sell on Bimaya.
+    """An enquiry submitted from a public form on Bimaya.
 
-    Providers are never self-registered — they submit this lead from the public
-    "For insurance providers" page, and a Bimaya administrator reviews it,
-    contacts the company, and onboards them out of band. This model only
-    captures the enquiry; it does not create any account.
+    Two kinds share this table (see :class:`Kind`): a provider onboarding
+    request from the "For insurance providers" page, and a general message from
+    the "Contact" page. Neither creates any account — a Bimaya administrator
+    reviews the enquiry and follows up out of band. ``company_name`` is only
+    meaningful for provider enquiries and is left blank for contact messages.
     """
+
+    class Kind(models.TextChoices):
+        PROVIDER = "PROVIDER", "Provider onboarding"
+        CONTACT = "CONTACT", "Contact enquiry"
 
     class Status(models.TextChoices):
         NEW = "NEW", "New"
@@ -18,7 +23,10 @@ class ProviderLead(TimeStampedModel):
         ONBOARDED = "ONBOARDED", "Onboarded"
         DECLINED = "DECLINED", "Declined"
 
-    company_name = models.CharField(max_length=150)
+    kind = models.CharField(
+        max_length=20, choices=Kind.choices, default=Kind.PROVIDER
+    )
+    company_name = models.CharField(max_length=150, blank=True)
     contact_name = models.CharField(max_length=150)
     email = models.EmailField()
     phone = models.CharField(max_length=20, blank=True)
@@ -32,4 +40,5 @@ class ProviderLead(TimeStampedModel):
         verbose_name = "provider lead"
 
     def __str__(self):
-        return f"{self.company_name} · {self.get_status_display()}"
+        label = self.company_name or self.contact_name
+        return f"{label} · {self.get_status_display()}"

@@ -12,6 +12,7 @@ from rest_framework import serializers
 from apps.documents.models import CustomerKyc
 from apps.policies.serializers import PolicyListSerializer
 from apps.providers.models import Provider, ProviderRole
+from apps.purchases.models import ProviderPayout
 from apps.purchases.serializers import PolicyPurchaseSerializer
 
 User = get_user_model()
@@ -38,6 +39,7 @@ class AdminProviderSerializer(serializers.ModelSerializer):
             "support_phone",
             "kyc_status",
             "is_approved",
+            "commission_rate",
             "owner_email",
             "owner_name",
             "policy_count",
@@ -45,6 +47,14 @@ class AdminProviderSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
+
+
+class AdminProviderCommissionSerializer(serializers.Serializer):
+    """Admin input to set a provider's platform commission rate (percent)."""
+
+    commission_rate = serializers.DecimalField(
+        max_digits=5, decimal_places=2, min_value=0, max_value=100
+    )
 
 
 class AdminKycSerializer(serializers.ModelSerializer):
@@ -150,6 +160,35 @@ class AdminPurchaseSerializer(PolicyPurchaseSerializer):
         fields = PolicyPurchaseSerializer.Meta.fields + (
             "customer_email",
             "customer_name",
+        )
+        read_only_fields = fields
+
+
+class AdminPayoutSerializer(serializers.ModelSerializer):
+    """Provider payout row for the admin payouts table."""
+
+    provider_name = serializers.CharField(
+        source="provider.company_name", read_only=True
+    )
+    policy_name = serializers.CharField(source="purchase.policy.name", read_only=True)
+    policy_number = serializers.CharField(
+        source="purchase.policy_number", read_only=True
+    )
+
+    class Meta:
+        model = ProviderPayout
+        fields = (
+            "id",
+            "provider_name",
+            "policy_name",
+            "policy_number",
+            "gross_amount",
+            "commission_rate",
+            "commission_amount",
+            "net_amount",
+            "status",
+            "paid_at",
+            "created_at",
         )
         read_only_fields = fields
 

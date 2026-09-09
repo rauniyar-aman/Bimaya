@@ -10,6 +10,7 @@ import {
   FileTextIcon,
   BadgeCheckIcon,
   UsersIcon,
+  WalletIcon,
 } from "@/components/icons";
 
 const SECTIONS = [
@@ -17,6 +18,7 @@ const SECTIONS = [
   { href: "/admin/providers", label: "Providers", icon: BuildingIcon },
   { href: "/admin/kyc", label: "KYC review", icon: BadgeCheckIcon },
   { href: "/admin/purchases", label: "Purchases", icon: ClipboardIcon },
+  { href: "/admin/payouts", label: "Payouts", icon: WalletIcon },
   { href: "/admin/users", label: "Users", icon: UsersIcon },
   { href: "/admin/policies", label: "Policies", icon: FileTextIcon },
 ];

@@ -5,8 +5,15 @@ from .models import ProviderLead
 
 @admin.register(ProviderLead)
 class ProviderLeadAdmin(admin.ModelAdmin):
-    list_display = ("company_name", "contact_name", "email", "status", "created_at")
-    list_filter = ("status",)
+    list_display = (
+        "contact_name",
+        "kind",
+        "company_name",
+        "email",
+        "status",
+        "created_at",
+    )
+    list_filter = ("kind", "status")
     search_fields = ("company_name", "contact_name", "email", "phone")
     readonly_fields = ("created_at", "updated_at")
 

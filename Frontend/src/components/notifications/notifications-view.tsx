@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { NotificationRow } from "@/components/notifications/notification-row";
+import { PushToggle } from "@/components/notifications/push-toggle";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -112,6 +113,8 @@ export function NotificationsView() {
           </Button>
         )}
       </div>
+
+      <PushToggle />
 
       {state.phase === "loading" && (
         <div className="flex items-center justify-center py-20">

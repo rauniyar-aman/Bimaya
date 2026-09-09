@@ -30,11 +30,12 @@ from .exceptions import (
     PurchaseNotCancellable,
     PurchaseNotIssuable,
 )
-from .models import PolicyPurchase
+from .models import PolicyPurchase, ProviderPayout
 from .serializers import (
     PolicyIssueSerializer,
     PolicyPurchaseCreateSerializer,
     PolicyPurchaseSerializer,
+    ProviderPayoutSerializer,
     ProviderPurchaseSerializer,
 )
 
@@ -207,6 +208,29 @@ class ProviderPurchaseListView(ProviderIssuanceBase, ListAPIView):
 
     def get_queryset(self):
         return super().get_queryset().select_related("customer").order_by("-created_at")
+
+
+@extend_schema(tags=PURCHASE_TAG, summary="List the provider's commission payouts")
+class ProviderPayoutListView(ProviderIssuanceBase, ListAPIView):
+    """Read-only payout ledger for the acting provider: the commission split on
+    each issued sale of their policies, and whether Bimaya has paid it out yet.
+    Scoped to the provider's own payouts by the queryset, so no cross-provider
+    leakage. Filterable by settlement status, searchable by policy name/number."""
+
+    serializer_class = ProviderPayoutSerializer
+    filterset_fields = ["status"]
+    search_fields = ["purchase__policy__name", "purchase__policy_number"]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        provider = self.get_provider()
+        if provider is None:
+            return ProviderPayout.objects.none()
+        return (
+            ProviderPayout.objects.filter(provider=provider)
+            .select_related("purchase", "purchase__policy")
+            .order_by("-created_at")
+        )
 
 
 @extend_schema(
