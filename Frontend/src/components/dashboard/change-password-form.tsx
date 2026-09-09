@@ -6,7 +6,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { type MessageResponse, errorMessage, fieldErrors } from "@/lib/api";
 
 const EMPTY = {
@@ -87,10 +87,9 @@ export function ChangePasswordForm() {
             error={errors.current_password}
             required
           >
-            <Input
+            <PasswordInput
               id="current_password"
               name="current_password"
-              type="password"
               autoComplete="current-password"
               placeholder="••••••••"
               value={form.current_password}
@@ -107,10 +106,9 @@ export function ChangePasswordForm() {
             hint="At least 8 characters, and not something easy to guess."
             required
           >
-            <Input
+            <PasswordInput
               id="new_password"
               name="new_password"
-              type="password"
               autoComplete="new-password"
               placeholder="••••••••"
               value={form.new_password}
@@ -126,10 +124,9 @@ export function ChangePasswordForm() {
             error={errors.confirm_password}
             required
           >
-            <Input
+            <PasswordInput
               id="confirm_new_password"
               name="confirm_password"
-              type="password"
               autoComplete="new-password"
               placeholder="••••••••"
               value={form.confirm_password}

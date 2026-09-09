@@ -6,6 +6,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
@@ -323,9 +324,8 @@ export function ProviderMembersModal({
                     hint="At least 8 characters. Share it with them securely."
                     required
                   >
-                    <Input
+                    <PasswordInput
                       id="member_password"
-                      type="text"
                       autoComplete="off"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}

@@ -8,6 +8,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import {
   api,
   errorMessage,
@@ -139,10 +140,9 @@ export function RegisterForm() {
           hint="At least 8 characters, and not something easy to guess."
           required
         >
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             autoComplete="new-password"
             placeholder="••••••••"
             value={form.password}
@@ -158,10 +158,9 @@ export function RegisterForm() {
           error={errors.confirm_password}
           required
         >
-          <Input
+          <PasswordInput
             id="confirm_password"
             name="confirm_password"
-            type="password"
             autoComplete="new-password"
             placeholder="••••••••"
             value={form.confirm_password}

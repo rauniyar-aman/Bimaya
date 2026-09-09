@@ -9,6 +9,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { errorCode, errorMessage, fieldErrors } from "@/lib/api";
 import { safeNext } from "@/lib/redirect";
 
@@ -102,10 +103,9 @@ export function LoginForm() {
           error={errors.password}
           required
         >
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             autoComplete="current-password"
             placeholder="••••••••"
             value={password}

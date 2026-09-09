@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { api, errorMessage, fieldErrors } from "@/lib/api";
 import { useDevCode } from "@/lib/dev-otp";
 
@@ -117,10 +118,9 @@ export function ResetPasswordForm() {
           hint="At least 8 characters, and not something easy to guess."
           required
         >
-          <Input
+          <PasswordInput
             id="new_password"
             name="new_password"
-            type="password"
             autoComplete="new-password"
             placeholder="••••••••"
             value={password}
@@ -136,10 +136,9 @@ export function ResetPasswordForm() {
           error={errors.confirm_password}
           required
         >
-          <Input
+          <PasswordInput
             id="confirm_password"
             name="confirm_password"
-            type="password"
             autoComplete="new-password"
             placeholder="••••••••"
             value={confirmPassword}
