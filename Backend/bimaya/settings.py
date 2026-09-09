@@ -268,16 +268,43 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------
-# Email (Django 6 MAILERS API — console backend in dev)
+# Email (Django 6 MAILERS API)
 # ---------------------------------------------------------------------------
-MAILERS = {
-    "default": {
-        "BACKEND": env(
-            "EMAIL_BACKEND",
-            default="django.core.mail.backends.console.EmailBackend",
-        ),
-    },
-}
+# Dev ships with the console backend: OTP codes and notification emails print to
+# the server log, so signup is testable with zero setup (the code is also echoed
+# in the API response — see OTP_RETURN_IN_RESPONSE above). To deliver REAL email,
+# set EMAIL_HOST plus the matching credentials in .env — any SMTP provider works
+# (Gmail, Brevo, SendGrid, Mailgun, Resend, …). A configured host automatically
+# switches the default mailer to SMTP; see .env.example for ready-to-copy blocks.
+# (These read into underscore locals, not EMAIL_* settings, because Django 6
+# forbids the deprecated EMAIL_* settings once MAILERS is defined.)
+_email_backend = env(
+    "EMAIL_BACKEND",
+    default="django.core.mail.backends.console.EmailBackend",
+)
+_email_host = env("EMAIL_HOST", default="")
+
+if _email_host:
+    MAILERS = {
+        "default": {
+            "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+            "OPTIONS": {
+                "host": _email_host,
+                "port": env.int("EMAIL_PORT", default=587),
+                "username": env("EMAIL_HOST_USER", default=""),
+                "password": env("EMAIL_HOST_PASSWORD", default=""),
+                "use_tls": env.bool("EMAIL_USE_TLS", default=True),
+                "use_ssl": env.bool("EMAIL_USE_SSL", default=False),
+                "timeout": env.int("EMAIL_TIMEOUT", default=15),
+            },
+        },
+    }
+else:
+    # No SMTP host → keep the console backend (or whatever EMAIL_BACKEND names,
+    # e.g. a file/locmem backend in tests) with no SMTP options attached, so
+    # development and CI stay zero-config.
+    MAILERS = {"default": {"BACKEND": _email_backend}}
+
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Bimaya <no-reply@bimaya.local>")
 
 # ---------------------------------------------------------------------------

@@ -12,8 +12,7 @@ push swallow their own errors, so a mail/SMS/push outage cannot roll back a
 payment or a claim decision.
 """
 
-from django.conf import settings
-from django.core.mail import send_mail
+from apps.core.email import send_branded_email
 
 from .models import Notification
 from .push import send_push
@@ -29,7 +28,7 @@ def notify(recipient, type, title, body="", url="", email=True, sms=True, push=T
         recipient=recipient, type=type, title=title, body=body, url=url
     )
     if email and getattr(recipient, "email", ""):
-        _send_email(recipient.email, title, body)
+        _send_email(recipient.email, title, body, url)
     if sms and getattr(recipient, "phone", ""):
         send_sms(recipient.phone, f"{title} — {body}" if body else title)
     if push:
@@ -37,13 +36,13 @@ def notify(recipient, type, title, body="", url="", email=True, sms=True, push=T
     return notification
 
 
-def _send_email(address, subject, body):
-    send_mail(
+def _send_email(address, subject, body, url=""):
+    send_branded_email(
         subject=subject,
-        message=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[address],
-        fail_silently=True,
+        to=address,
+        heading=subject,
+        paragraphs=[body] if body else [],
+        cta=("View in Bimaya", url) if url else None,
     )
 
 

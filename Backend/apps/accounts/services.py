@@ -9,8 +9,9 @@ import secrets
 from datetime import timedelta
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.utils import timezone
+
+from apps.core.email import send_branded_email
 
 from .models import OTP
 
@@ -55,24 +56,22 @@ def deliver_otp(otp):
     """Send the code to the user.
 
     Development uses the console mail backend, so the code simply appears in the
-    server log. Production swaps in a real mail/SMS backend via ``.env``.
+    server log. Setting SMTP credentials in ``.env`` delivers it as real,
+    branded email instead — see ``bimaya/settings.py`` (MAILERS).
     """
     subject, intro = _PURPOSE_COPY.get(
         otp.purpose, ("Your Bimaya verification code", "Use the code below to continue.")
     )
-    body = (
-        f"{intro}\n\n"
-        f"    {otp.code}\n\n"
-        f"This code expires in {settings.OTP_EXPIRY_MINUTES} minutes. "
-        "If you did not request it, you can safely ignore this message.\n\n"
-        "— Bimaya"
-    )
-    send_mail(
+    send_branded_email(
         subject=subject,
-        message=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[otp.user.email],
-        fail_silently=True,  # never fail a signup because mail delivery is down
+        to=otp.user.email,
+        heading=subject,
+        paragraphs=[
+            intro,
+            f"This code expires in {settings.OTP_EXPIRY_MINUTES} minutes. If you "
+            "did not request it, you can safely ignore this message.",
+        ],
+        code=otp.code,
     )
 
 
