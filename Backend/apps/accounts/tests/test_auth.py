@@ -93,6 +93,27 @@ class RegistrationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(User.objects.exists())
 
+    def test_phone_is_required(self):
+        response = self.client.post(
+            self.url, register_payload(phone=""), format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("phone", response.data["errors"])
+        self.assertFalse(User.objects.exists())
+
+    def test_phone_must_be_unique(self):
+        self.client.post(self.url, register_payload(), format="json")
+        response = self.client.post(
+            self.url,
+            register_payload(email="another@example.com", phone="9800000000"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("phone", response.data["errors"])
+        self.assertEqual(User.objects.count(), 1)
+
     def test_admin_role_cannot_be_self_assigned(self):
         # ``role`` is not a registration input; a client attempting to set it is
         # ignored and the account is created as a customer.

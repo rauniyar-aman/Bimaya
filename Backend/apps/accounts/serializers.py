@@ -1,5 +1,7 @@
 """Serializers for registration, verification, login and profile management."""
 
+import re
+
 from django.contrib.auth import get_user_model, password_validation
 from django.db import transaction
 from rest_framework import serializers
@@ -15,6 +17,14 @@ from .models import OTP
 from .services import OTPError, consume_otp, issue_otp
 
 User = get_user_model()
+
+
+def _phone_taken(phone, *, exclude_pk=None):
+    """Whether ``phone`` already belongs to another (non-blank) account."""
+    others = User.objects.filter(phone=phone)
+    if exclude_pk is not None:
+        others = others.exclude(pk=exclude_pk)
+    return others.exists()
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -41,6 +51,17 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         model = User
         fields = ("full_name", "phone")
 
+    def validate_phone(self, value):
+        # A phone number is unique per account. Clearing it is allowed (stored
+        # as "", which the unique constraint exempts); a non-empty number must
+        # not already belong to a *different* account.
+        phone = value.strip()
+        if phone and _phone_taken(phone, exclude_pk=self.instance.pk):
+            raise serializers.ValidationError(
+                "An account with this mobile number already exists."
+            )
+        return phone
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     """Create an account. The user must then confirm an OTP before signing in."""
@@ -49,6 +70,10 @@ class RegisterSerializer(serializers.ModelSerializer):
     confirm_password = serializers.CharField(
         write_only=True, style={"input_type": "password"}
     )
+    # A mobile number is mandatory at registration and unique to the account —
+    # it is how we reach customers for OTPs and policy updates. (Declared here,
+    # rather than left to the model, so it is required and not blank.)
+    phone = serializers.CharField(max_length=20)
 
     class Meta:
         model = User
@@ -70,6 +95,18 @@ class RegisterSerializer(serializers.ModelSerializer):
                 "An account with this email already exists."
             )
         return email
+
+    def validate_phone(self, value):
+        phone = value.strip()
+        # Light sanity check — reject obvious non-numbers without being strict
+        # about formatting (users may include a country code, spaces or dashes).
+        if len(re.sub(r"\D", "", phone)) < 7:
+            raise serializers.ValidationError("Enter a valid mobile number.")
+        if _phone_taken(phone):
+            raise serializers.ValidationError(
+                "An account with this mobile number already exists."
+            )
+        return phone
 
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:

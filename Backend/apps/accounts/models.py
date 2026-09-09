@@ -38,6 +38,18 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     class Meta:
         ordering = ["-date_joined"]
+        constraints = [
+            # A phone number identifies one account, but only customers who
+            # register supply one — superusers, admin-onboarded providers/staff
+            # and seed accounts have none. So uniqueness is enforced only over
+            # real numbers; the blank "" that means "no phone on file" is exempt
+            # and may repeat across those internal accounts.
+            models.UniqueConstraint(
+                fields=["phone"],
+                condition=~models.Q(phone=""),
+                name="unique_user_phone",
+            ),
+        ]
 
     def __str__(self):
         return self.email

@@ -43,6 +43,11 @@ export function RegisterForm() {
     setErrors({});
     setFormError("");
 
+    if (!form.phone.trim()) {
+      setErrors({ phone: "Please enter your mobile number." });
+      return;
+    }
+
     if (form.password !== form.confirm_password) {
       setErrors({ confirm_password: "The two passwords do not match." });
       return;
@@ -118,7 +123,8 @@ export function RegisterForm() {
           label="Mobile number"
           htmlFor="phone"
           error={errors.phone}
-          hint="Optional — we use it for policy reminders."
+          hint="We use it to reach you about your policies."
+          required
         >
           <Input
             id="phone"
@@ -130,6 +136,7 @@ export function RegisterForm() {
             value={form.phone}
             onChange={(e) => update("phone", e.target.value)}
             aria-invalid={Boolean(errors.phone)}
+            required
           />
         </Field>
 

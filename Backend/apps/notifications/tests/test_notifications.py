@@ -1,6 +1,7 @@
 """Tests for the notification endpoints, the dispatch service, the SMS adapter,
 and a couple of representative transition hook points."""
 
+import itertools
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -21,14 +22,17 @@ no_throttle = mock.patch(
     new=lambda self, request, view: True,
 )
 
+# Phone numbers are unique per account, so hand every test user a distinct one.
+_phone_seq = itertools.count(9800000001)
 
-def make_user(email="user@bimaya.test", phone="9800000000"):
+
+def make_user(email="user@bimaya.test", phone=None):
     return User.objects.create_user(
         email=email,
         password="Himalaya#2026",
         role=User.Role.CUSTOMER,
         is_verified=True,
-        phone=phone,
+        phone=phone if phone is not None else str(next(_phone_seq)),
     )
 
 
