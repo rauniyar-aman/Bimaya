@@ -156,9 +156,9 @@ export default function Home() {
                   <Badge>Health</Badge>
                   <StatusPill status="active">Active</StatusPill>
                 </div>
-                <h3 className="mt-4 font-display text-lg font-semibold text-ink">
+                <p className="mt-4 font-display text-lg font-semibold text-ink">
                   Nagarik Health Plus
-                </h3>
+                </p>
                 <p className="mt-1 text-sm text-muted">
                   Cashless cover across 200+ partner hospitals.
                 </p>
@@ -192,10 +192,6 @@ export default function Home() {
                   </Link>
                 </div>
               </Card>
-
-              <div className="absolute -bottom-5 -left-5 z-20 hidden rounded-xl border border-line bg-white p-3 shadow-md sm:block">
-                <StatusPill status="success">Payment successful</StatusPill>
-              </div>
             </div>
           </Container>
         </section>
@@ -218,7 +214,7 @@ export default function Home() {
                 <Link
                   key={slug}
                   href={`/categories/${slug}`}
-                  className="group rounded-2xl border border-line bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-brand-200 hover:shadow-md"
+                  className="group flex flex-col rounded-2xl border border-line bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-brand-200 hover:shadow-md"
                 >
                   <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                     <Icon className="h-6 w-6" />
@@ -229,7 +225,7 @@ export default function Home() {
                   <p className="mt-1.5 text-sm leading-relaxed text-muted">
                     {description}
                   </p>
-                  <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600">
+                  <span className="mt-auto pt-4 inline-flex items-center gap-2 text-base font-semibold text-brand-600">
                     View plans
                     <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                   </span>
@@ -253,16 +249,18 @@ export default function Home() {
 
             <div className="mt-10 grid gap-6 md:grid-cols-3">
               {STEPS.map((step, i) => (
-                <div key={step.title} className="relative rounded-2xl bg-white p-6 shadow-sm">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-500 font-display text-base font-bold text-white">
+                <div key={step.title} className="flex items-start gap-4">
+                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500 font-display text-base font-bold text-white">
                     {i + 1}
                   </span>
-                  <h3 className="mt-4 font-display text-lg font-semibold text-ink">
-                    {step.title}
-                  </h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted">
-                    {step.description}
-                  </p>
+                  <div>
+                    <h3 className="font-display text-lg font-semibold text-ink">
+                      {step.title}
+                    </h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-muted">
+                      {step.description}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>

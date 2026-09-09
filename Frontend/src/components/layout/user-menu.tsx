@@ -74,7 +74,7 @@ export function UserMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
-          "flex items-center gap-2 rounded-full border border-line py-1 pl-1 pr-3 transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2",
+          "flex items-center gap-2.5 rounded-full border border-line py-1 pl-1 pr-3 transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2",
           open && "bg-surface",
         )}
       >

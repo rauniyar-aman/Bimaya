@@ -34,7 +34,7 @@ export function Footer() {
   return (
     <footer className="mt-auto border-t border-line bg-surface">
       <Container className="py-12">
-        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-10 md:grid-cols-2">
           <div className="max-w-xs">
             <Logo height={38} />
             <p className="mt-4 text-sm leading-relaxed text-muted">
@@ -43,25 +43,27 @@ export function Footer() {
             </p>
           </div>
 
-          {COLUMNS.map((col) => (
-            <div key={col.title}>
-              <h4 className="font-display text-sm font-semibold text-ink">
-                {col.title}
-              </h4>
-              <ul className="mt-4 space-y-2.5">
-                {col.links.map((link) => (
-                  <li key={link.href}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-muted transition-colors hover:text-brand-600"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
+            {COLUMNS.map((col) => (
+              <div key={col.title}>
+                <h3 className="font-display text-sm font-semibold text-ink">
+                  {col.title}
+                </h3>
+                <ul className="mt-4 space-y-2.5">
+                  {col.links.map((link) => (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        className="text-sm text-muted transition-colors hover:text-brand-600"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="mt-10 flex flex-col items-start justify-between gap-4 border-t border-line pt-6 sm:flex-row sm:items-center">
