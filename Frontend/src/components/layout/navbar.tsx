@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Logo } from "@/components/brand/logo";
@@ -18,8 +19,17 @@ const NAV_LINKS = [
   { href: "/#how-it-works", label: "How it works" },
 ];
 
+// Highlight the section the user is in. Anchor links to the homepage (e.g.
+// "/#how-it-works") never count as a location. A route is active on its own page
+// and on any page nested below it, so "Policies" stays lit on a policy detail.
+function isActive(pathname: string, href: string): boolean {
+  if (href.includes("#")) return false;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function Navbar() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
   const { status, isAuthenticated, user, signOut } = useAuth();
 
   return (
@@ -30,15 +40,24 @@ export function Navbar() {
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {NAV_LINKS.map((link) => {
+            const active = isActive(pathname, link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-brand-50 text-brand-600"
+                    : "text-ink/80 hover:bg-surface hover:text-brand-600",
+                )}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
@@ -103,16 +122,25 @@ export function Navbar() {
       {open && (
         <div className="border-t border-line bg-white md:hidden">
           <Container className="flex flex-col gap-1 py-3">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
-              >
-                {link.label}
-              </Link>
-            ))}
+            {NAV_LINKS.map((link) => {
+              const active = isActive(pathname, link.href);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setOpen(false)}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-brand-50 text-brand-600"
+                      : "text-ink/80 hover:bg-surface hover:text-brand-600",
+                  )}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
             {isAuthenticated && user ? (
               <div className="mt-2 space-y-1 border-t border-line pt-3">
                 <p className="px-3 pb-1 text-xs text-muted">

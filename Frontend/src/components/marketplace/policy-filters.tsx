@@ -68,68 +68,74 @@ export function PolicyFilters({
         e.preventDefault();
         apply({});
       }}
-      className="grid gap-3 rounded-2xl border border-line bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4"
+      className="rounded-2xl border border-line bg-white p-4 shadow-sm"
       role="search"
       aria-label="Filter policies"
     >
-      <div className="relative sm:col-span-2 lg:col-span-1">
-        <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-        <Input
-          type="search"
-          placeholder="Search policies…"
-          aria-label="Search policies"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
-      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:items-center">
+        <div className="relative sm:col-span-2 lg:flex-1">
+          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <Input
+            type="search"
+            placeholder="Search policies…"
+            aria-label="Search policies"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
 
-      <Select
-        aria-label="Category"
-        value={current.category ?? ""}
-        onChange={(e) => apply({ category: e.target.value })}
-      >
-        <option value="">All categories</option>
-        {categories.map((c) => (
-          <option key={c.slug} value={c.slug}>
-            {c.name}
-          </option>
-        ))}
-      </Select>
+        <Select
+          aria-label="Category"
+          className="lg:w-48"
+          value={current.category ?? ""}
+          onChange={(e) => apply({ category: e.target.value })}
+        >
+          <option value="">All categories</option>
+          {categories.map((c) => (
+            <option key={c.slug} value={c.slug}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
 
-      <Select
-        aria-label="Maximum premium"
-        value={current.premium_max ?? ""}
-        onChange={(e) => apply({ premium_max: e.target.value })}
-      >
-        {PREMIUM_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </Select>
+        <Select
+          aria-label="Maximum premium"
+          className="lg:w-48"
+          value={current.premium_max ?? ""}
+          onChange={(e) => apply({ premium_max: e.target.value })}
+        >
+          {PREMIUM_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </Select>
 
-      <Select
-        aria-label="Sort by"
-        value={current.ordering ?? ""}
-        onChange={(e) => apply({ ordering: e.target.value })}
-      >
-        {SORT_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </Select>
+        <Select
+          aria-label="Sort by"
+          className="lg:w-48"
+          value={current.ordering ?? ""}
+          onChange={(e) => apply({ ordering: e.target.value })}
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </Select>
 
-      <div className="flex items-center gap-3 sm:col-span-2 lg:col-span-4">
         <button
           type="submit"
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-700 lg:w-auto lg:px-5"
         >
           <SearchIcon className="h-4 w-4" />
           Search
         </button>
-        {hasFilters && (
+      </div>
+
+      {hasFilters && (
+        <div className="mt-3 flex justify-end">
           <button
             type="button"
             onClick={clearAll}
@@ -137,8 +143,8 @@ export function PolicyFilters({
           >
             Clear filters
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </form>
   );
 }

@@ -109,10 +109,15 @@ export default async function PoliciesPage({
             </div>
           ) : (
             <>
-              <p className="mt-6 text-sm text-muted">
-                {data.count} {data.count === 1 ? "plan" : "plans"} available
-              </p>
-              <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-6 flex items-baseline justify-between gap-4">
+                <h2 className="font-display text-lg font-semibold text-ink">
+                  Search results
+                </h2>
+                <p className="text-sm text-muted">
+                  {data.count} {data.count === 1 ? "plan" : "plans"}
+                </p>
+              </div>
+              <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {data.results.map((policy) => (
                   <PolicyCard key={policy.id} policy={policy} />
                 ))}

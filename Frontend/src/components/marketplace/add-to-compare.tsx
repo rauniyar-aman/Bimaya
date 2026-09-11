@@ -66,11 +66,12 @@ export function AddToCompare({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-3">
       <Button
         variant={selected ? "success" : "outline"}
         onClick={() => toggleCompareId(policyId)}
         disabled={full}
+        className="w-full"
       >
         {selected ? <CheckIcon className="h-4 w-4" /> : <PlusIcon className="h-4 w-4" />}
         {selected ? "Added to compare" : "Add to compare"}
@@ -78,13 +79,13 @@ export function AddToCompare({
       {count >= 2 && (
         <Link
           href={`/compare?ids=${getCompareIds().join(",")}`}
-          className="text-sm font-medium text-brand-600 underline-offset-4 hover:underline"
+          className="block text-center text-sm font-medium text-brand-600 underline-offset-4 hover:underline"
         >
           Compare {count} plans →
         </Link>
       )}
       {full && (
-        <span className="text-xs text-muted">
+        <span className="block text-center text-xs text-muted">
           You can compare up to {MAX_COMPARE} plans.
         </span>
       )}

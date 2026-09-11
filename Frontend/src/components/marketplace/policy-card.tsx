@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AddToCompare } from "@/components/marketplace/add-to-compare";
 import { CategoryIcon } from "@/components/marketplace/category-icon";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { ArrowRightIcon } from "@/components/icons";
@@ -47,7 +48,7 @@ export function PolicyCard({ policy }: { policy: PolicySummary }) {
         </div>
       </div>
 
-      <div className="mt-4 flex items-end justify-between">
+      <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs text-muted">Premium</p>
           <p className="font-display text-xl font-bold text-brand-600">
@@ -57,17 +58,16 @@ export function PolicyCard({ policy }: { policy: PolicySummary }) {
             </span>
           </p>
         </div>
-        <Link
-          href={`/policies/${policy.slug}`}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
-        >
-          View plan
-          <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-        </Link>
-      </div>
-
-      <div className="mt-3 border-t border-line pt-3">
-        <AddToCompare policyId={policy.id} compact />
+        <div className="flex items-center gap-2">
+          <AddToCompare policyId={policy.id} compact />
+          <Link
+            href={`/policies/${policy.slug}`}
+            className={buttonVariants({ variant: "primary", size: "sm" })}
+          >
+            View plan
+            <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        </div>
       </div>
     </Card>
   );

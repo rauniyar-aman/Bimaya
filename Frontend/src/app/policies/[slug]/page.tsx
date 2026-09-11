@@ -117,7 +117,7 @@ export default async function PolicyDetailPage({ params }: { params: Params }) {
                   <h2 className="font-display text-lg font-semibold text-ink">
                     What&apos;s covered
                   </h2>
-                  <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <ul className="mt-3 grid max-w-2xl gap-x-8 gap-y-2 sm:grid-cols-2">
                     {policy.features.map((feature, i) => (
                       <li key={i} className="flex gap-2 text-sm text-ink">
                         <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-success-500" />
