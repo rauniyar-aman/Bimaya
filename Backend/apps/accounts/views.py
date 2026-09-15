@@ -30,13 +30,17 @@ User = get_user_model()
 AUTH_TAG = ["auth"]
 
 
-def _tokens_for(user):
-    """Issue a fresh access/refresh pair plus the serialised user."""
+def _tokens_for(user, request=None):
+    """Issue a fresh access/refresh pair plus the serialised user.
+
+    ``request`` is threaded into the serializer so any avatar URL is returned
+    absolute (rooted at the host) rather than relative to the endpoint.
+    """
     refresh = LoginSerializer.get_token(user)
     return {
         "access": str(refresh.access_token),
         "refresh": str(refresh),
-        "user": UserSerializer(user).data,
+        "user": UserSerializer(user, context={"request": request}).data,
     }
 
 
@@ -111,7 +115,7 @@ class VerifyOTPView(GenericAPIView):
         user = serializer.save()
         notifications.notify_welcome(user)
         return Response(
-            {"detail": "Your account is verified. Welcome to Bimaya.", **_tokens_for(user)}
+            {"detail": "Your account is verified. Welcome to Bimaya.", **_tokens_for(user, request)}
         )
 
 
@@ -191,8 +195,11 @@ class MeView(RetrieveUpdateAPIView):
 
     def update(self, request, *args, **kwargs):
         super().update(request, *args, **kwargs)
-        # Always answer with the full user record so the client can refresh state.
-        return Response(UserSerializer(request.user).data)
+        # Always answer with the full user record so the client can refresh
+        # state; pass the request so the avatar URL is absolute.
+        return Response(
+            UserSerializer(request.user, context=self.get_serializer_context()).data
+        )
 
 
 @extend_schema(

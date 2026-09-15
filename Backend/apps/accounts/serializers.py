@@ -18,6 +18,9 @@ from .services import OTPError, consume_otp, issue_otp
 
 User = get_user_model()
 
+# Ceiling for uploaded profile pictures; mirrored by the frontend file picker.
+AVATAR_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+
 
 def _phone_taken(phone, *, exclude_pk=None):
     """Whether ``phone`` already belongs to another (non-blank) account."""
@@ -37,19 +40,39 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "full_name",
             "phone",
+            "avatar",
             "role",
             "is_verified",
             "date_joined",
         )
-        read_only_fields = ("id", "email", "role", "is_verified", "date_joined")
+        read_only_fields = (
+            "id",
+            "email",
+            "avatar",
+            "role",
+            "is_verified",
+            "date_joined",
+        )
 
 
 class ProfileUpdateSerializer(serializers.ModelSerializer):
     """Editable profile fields. Email and role are deliberately immutable here."""
 
+    # ``allow_null`` lets the client clear the picture with ``{"avatar": null}``;
+    # a multipart upload replaces it. The 5 MB ceiling matches the frontend
+    # picker — the backend enforces it too, since that is the real boundary.
+    avatar = serializers.ImageField(required=False, allow_null=True)
+
     class Meta:
         model = User
-        fields = ("full_name", "phone")
+        fields = ("full_name", "phone", "avatar")
+
+    def validate_avatar(self, image):
+        if image is not None and image.size > AVATAR_MAX_BYTES:
+            raise serializers.ValidationError(
+                "That image is over 5 MB. Please choose a smaller file."
+            )
+        return image
 
     def validate_phone(self, value):
         # A phone number is unique per account. Clearing it is allowed (stored
@@ -187,7 +210,8 @@ class LoginSerializer(TokenObtainPairSerializer):
         data = super().validate(attrs)
         if not self.user.is_verified:
             raise AccountNotVerified()
-        data["user"] = UserSerializer(self.user).data
+        # Pass the request through so any avatar URL comes back absolute.
+        data["user"] = UserSerializer(self.user, context=self.context).data
         return data
 
 

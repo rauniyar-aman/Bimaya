@@ -7,11 +7,18 @@ the repeated calls) and exercised separately in :class:`ThrottlingTests`.
 from datetime import timedelta
 from unittest import mock
 
+import io
+import shutil
+import tempfile
+
 from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
@@ -397,6 +404,83 @@ class ProfileTests(APITestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "ram@example.com")
         self.assertEqual(self.user.role, User.Role.CUSTOMER)
+
+
+# A throwaway media root so uploaded test images never touch the project's own.
+_AVATAR_MEDIA_ROOT = tempfile.mkdtemp(prefix="bimaya-avatar-tests-")
+
+
+def _png_upload(name="avatar.png", color=(26, 84, 147)):
+    """A small but genuinely valid PNG, so ImageField's Pillow check passes."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (16, 16), color).save(buffer, format="PNG")
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/png")
+
+
+@no_throttling
+@override_settings(MEDIA_ROOT=_AVATAR_MEDIA_ROOT)
+class AvatarUploadTests(APITestCase):
+    def setUp(self):
+        self.url = reverse("me")
+        self.user = User.objects.create_user(
+            email="ram@example.com",
+            password=PASSWORD,
+            full_name="Ram Thapa",
+            is_verified=True,
+        )
+        self.client.force_authenticate(self.user)
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(_AVATAR_MEDIA_ROOT, ignore_errors=True)
+
+    def test_avatar_can_be_uploaded(self):
+        response = self.client.patch(
+            self.url, {"avatar": _png_upload()}, format="multipart"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.avatar.name.startswith("avatars/"))
+        # The URL comes back absolute (host-rooted) so a browser can load it
+        # directly — the MEDIA_URL leading slash plus request context at work.
+        self.assertTrue(
+            response.data["avatar"].startswith("http://testserver/media/avatars/")
+        )
+
+    def test_avatar_can_be_removed(self):
+        self.user.avatar = _png_upload()
+        self.user.save(update_fields=["avatar"])
+
+        response = self.client.patch(self.url, {"avatar": None}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["avatar"])
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.avatar)
+
+    def test_oversized_avatar_is_rejected(self):
+        with mock.patch("apps.accounts.serializers.AVATAR_MAX_BYTES", 8):
+            response = self.client.patch(
+                self.url, {"avatar": _png_upload()}, format="multipart"
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("avatar", response.data["errors"])
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.avatar)
+
+    def test_non_image_upload_is_rejected(self):
+        bogus = SimpleUploadedFile(
+            "note.txt", b"not really an image", content_type="text/plain"
+        )
+        response = self.client.patch(self.url, {"avatar": bogus}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("avatar", response.data["errors"])
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.avatar)
 
 
 @no_throttling

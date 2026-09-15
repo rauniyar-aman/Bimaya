@@ -262,7 +262,10 @@ USE_TZ = True
 # ---------------------------------------------------------------------------
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-MEDIA_URL = "media/"
+# Leading slash so uploaded-file URLs are rooted at the host, not the request
+# path. Without it, DRF's ``build_absolute_uri`` would join a relative "media/"
+# onto whatever endpoint served the record (e.g. ".../auth/media/...").
+MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

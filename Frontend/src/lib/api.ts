@@ -119,6 +119,11 @@ export interface AuthUser {
   email: string;
   full_name: string;
   phone: string;
+  /**
+   * Absolute URL of the user's profile picture, or `null` if none is set. The
+   * backend returns it host-rooted so it can be used directly as an `<img>` src.
+   */
+  avatar: string | null;
   role: UserRole;
   is_verified: boolean;
   date_joined: string;

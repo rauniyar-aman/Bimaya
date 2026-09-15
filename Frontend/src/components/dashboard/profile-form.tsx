@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Alert } from "@/components/ui/alert";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
+import { FileInput } from "@/components/ui/file-input";
 import { Input } from "@/components/ui/input";
-import { ROLE_LABELS } from "@/lib/user";
+import { ROLE_LABELS, displayName, initials } from "@/lib/user";
 import { type AuthUser, errorMessage, fieldErrors } from "@/lib/api";
 
 export function ProfileForm() {
@@ -22,11 +24,60 @@ export function ProfileForm() {
   const [saved, setSaved] = useState(false);
   const [pending, setPending] = useState(false);
 
+  // Avatar uploads happen immediately (not on the details form submit), so they
+  // carry their own state. `pickerKey` remounts the file picker after each
+  // change to clear its transient preview.
+  const [avatarError, setAvatarError] = useState("");
+  const [avatarPending, setAvatarPending] = useState(false);
+  const [pickerKey, setPickerKey] = useState(0);
+
   if (!user) return null;
 
   const dirty =
     fullName.trim() !== (user.full_name ?? "") ||
     phone.trim() !== (user.phone ?? "");
+
+  async function handleAvatarFile(file: File | null) {
+    // The picker also fires `null` when its own selection is cleared; only an
+    // actual file means "upload this".
+    if (!file) return;
+    setAvatarError("");
+    setAvatarPending(true);
+
+    const body = new FormData();
+    body.append("avatar", file);
+    try {
+      await authFetch<AuthUser>("/auth/me/", { method: "PATCH", form: body });
+      await reloadUser();
+    } catch (error) {
+      setAvatarError(
+        errorMessage(error, "We could not update your photo. Please try again."),
+      );
+    } finally {
+      setAvatarPending(false);
+      setPickerKey((key) => key + 1);
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    setAvatarError("");
+    setAvatarPending(true);
+    try {
+      // A JSON null clears the stored image (the field allows it server-side).
+      await authFetch<AuthUser>("/auth/me/", {
+        method: "PATCH",
+        json: { avatar: null },
+      });
+      await reloadUser();
+    } catch (error) {
+      setAvatarError(
+        errorMessage(error, "We could not remove your photo. Please try again."),
+      );
+    } finally {
+      setAvatarPending(false);
+      setPickerKey((key) => key + 1);
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -63,6 +114,43 @@ export function ProfileForm() {
       </CardHeader>
 
       <CardContent>
+        <div className="mb-6 border-b border-line pb-6">
+          <p className="text-sm font-medium text-ink">Profile picture</p>
+          <div className="mt-3 flex items-start gap-4">
+            <Avatar
+              src={user.avatar}
+              fallback={initials(user)}
+              alt={displayName(user)}
+              size="lg"
+            />
+            <div className="min-w-0 flex-1">
+              <FileInput
+                key={pickerKey}
+                id="profile_avatar"
+                onFile={handleAvatarFile}
+                disabled={avatarPending}
+              />
+              {user.avatar && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2"
+                  disabled={avatarPending}
+                  onClick={handleRemoveAvatar}
+                >
+                  Remove photo
+                </Button>
+              )}
+            </div>
+          </div>
+          {avatarError && (
+            <Alert variant="error" className="mt-3">
+              {avatarError}
+            </Alert>
+          )}
+        </div>
+
         {saved && (
           <Alert variant="success" className="mb-5">
             Your details have been saved.
