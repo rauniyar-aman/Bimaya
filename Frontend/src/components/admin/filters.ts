@@ -47,3 +47,9 @@ export const PAYOUT_FILTERS = [
   { value: "PENDING", label: "Pending" },
   { value: "PAID", label: "Paid" },
 ];
+
+export const STAFF_FILTERS = [
+  { value: "", label: "All staff" },
+  { value: "true", label: "Active" },
+  { value: "false", label: "Disabled" },
+];

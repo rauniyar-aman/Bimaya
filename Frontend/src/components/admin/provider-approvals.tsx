@@ -6,6 +6,7 @@ import { PROVIDER_FILTERS } from "@/components/admin/filters";
 import { KYC_STATUS_META } from "@/components/admin/status-meta";
 import { ExportButton } from "@/components/admin/export-button";
 import { ProviderMembersModal } from "@/components/admin/provider-members";
+import { ProviderKycModal } from "@/components/admin/provider-kyc";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,7 @@ export function ProviderApprovals() {
   const [actionError, setActionError] = useState("");
 
   const [members, setMembers] = useState<AdminProvider | null>(null);
+  const [kycFor, setKycFor] = useState<AdminProvider | null>(null);
 
   // Commission-rate editor
   const [commissionFor, setCommissionFor] = useState<AdminProvider | null>(null);
@@ -211,6 +213,7 @@ export function ProviderApprovals() {
                         {provider.company_name}
                       </div>
                       <div className="text-xs text-muted">
+                        <span className="font-mono">{provider.public_id}</span> ·
                         Joined {formatDate(provider.created_at)}
                       </div>
                     </TD>
@@ -238,6 +241,13 @@ export function ProviderApprovals() {
                           onClick={() => setMembers(provider)}
                         >
                           Team
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setKycFor(provider)}
+                        >
+                          KYC
                         </Button>
                         <Button
                           variant="secondary"
@@ -333,6 +343,14 @@ export function ProviderApprovals() {
           provider={members}
           open={members !== null}
           onClose={() => setMembers(null)}
+        />
+      )}
+
+      {kycFor && (
+        <ProviderKycModal
+          provider={kycFor}
+          open={kycFor !== null}
+          onClose={() => setKycFor(null)}
         />
       )}
 

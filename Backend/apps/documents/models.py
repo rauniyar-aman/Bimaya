@@ -2,6 +2,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
 
@@ -120,3 +121,104 @@ class CustomerKyc(TimeStampedModel):
         self.status = self.Status.REJECTED
         self.review_note = note
         self.save(update_fields=["status", "review_note", "updated_at"])
+
+
+class ProviderKyc(TimeStampedModel):
+    """A verification document belonging to a provider (insurance company).
+
+    Where :class:`CustomerKyc` captures a person's identity, this stores the
+    company's registration / tax / licensing paperwork. A provider organisation
+    can hold several documents; each is reviewed by a Bimaya administrator and
+    moved from ``PENDING`` to ``VERIFIED`` or ``REJECTED`` (the review backs
+    ``apps.staff.rbac.Perm.PROVIDER_KYC_REVIEW``). The provider-wide
+    ``Provider.kyc_status`` flag remains the headline gate; these are the
+    supporting evidence behind it.
+
+    Files are PII-adjacent company documents kept under the git-ignored
+    ``MEDIA_ROOT`` and served only through authenticated, scoped download
+    endpoints — never a raw media URL.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending review"
+        VERIFIED = "VERIFIED", "Verified"
+        REJECTED = "REJECTED", "Rejected"
+
+    class DocumentType(models.TextChoices):
+        REGISTRATION = "REGISTRATION", "Company registration"
+        TAX = "TAX", "Tax / PAN registration"
+        LICENSE = "LICENSE", "Insurance licence"
+        OTHER = "OTHER", "Other"
+
+    provider = models.ForeignKey(
+        "providers.Provider",
+        on_delete=models.CASCADE,
+        related_name="kyc_documents",
+    )
+    document_type = models.CharField(max_length=20, choices=DocumentType.choices)
+    file = models.FileField(upload_to="provider_kyc/%Y/%m/")
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+    review_note = models.TextField(
+        blank=True, help_text="Why a document was rejected — shown back to the provider."
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="uploaded_provider_kyc",
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_provider_kyc",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(TimeStampedModel.Meta):
+        indexes = [models.Index(fields=["provider", "status"])]
+        verbose_name = "provider KYC document"
+        verbose_name_plural = "provider KYC documents"
+
+    def __str__(self):
+        return f"{self.provider} · {self.get_document_type_display()} · {self.get_status_display()}"
+
+    @property
+    def is_verified(self):
+        return self.status == self.Status.VERIFIED
+
+    def mark_verified(self, reviewer=None, note=""):
+        """Approve this document. Clears any prior rejection note."""
+        self.status = self.Status.VERIFIED
+        self.review_note = note
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.save(
+            update_fields=[
+                "status",
+                "review_note",
+                "reviewed_by",
+                "reviewed_at",
+                "updated_at",
+            ]
+        )
+
+    def mark_rejected(self, note, reviewer=None):
+        """Reject this document, recording why (shown back to the provider)."""
+        self.status = self.Status.REJECTED
+        self.review_note = note
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.save(
+            update_fields=[
+                "status",
+                "review_note",
+                "reviewed_by",
+                "reviewed_at",
+                "updated_at",
+            ]
+        )

@@ -31,7 +31,16 @@ def _phone_taken(phone, *, exclude_pk=None):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """The authenticated user's own record (``/auth/me``)."""
+    """The authenticated user's own record (``/auth/me``).
+
+    ``permissions`` and ``staff_roles`` are derived, read-only fields: they let
+    the frontend render permission-aware navigation without an extra call. They
+    are empty for customers and providers, and are never client-settable. The
+    backend still authorises every request on its own — these are for display.
+    """
+
+    permissions = serializers.SerializerMethodField()
+    staff_roles = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -44,6 +53,8 @@ class UserSerializer(serializers.ModelSerializer):
             "role",
             "is_verified",
             "date_joined",
+            "permissions",
+            "staff_roles",
         )
         read_only_fields = (
             "id",
@@ -53,6 +64,17 @@ class UserSerializer(serializers.ModelSerializer):
             "is_verified",
             "date_joined",
         )
+
+    def get_permissions(self, obj):
+        # Imported here to avoid a circular import (staff imports accounts' User).
+        from apps.staff.services import staff_permissions
+
+        return sorted(staff_permissions(obj))
+
+    def get_staff_roles(self, obj):
+        from apps.staff.services import staff_role_values
+
+        return staff_role_values(obj)
 
 
 class ProfileUpdateSerializer(serializers.ModelSerializer):

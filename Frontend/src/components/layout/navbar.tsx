@@ -8,16 +8,10 @@ import { Logo } from "@/components/brand/logo";
 import { Container } from "@/components/layout/container";
 import { UserMenu } from "@/components/layout/user-menu";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
-
-const NAV_LINKS = [
-  { href: "/policies", label: "Policies" },
-  { href: "/compare", label: "Compare" },
-  { href: "/categories", label: "Categories" },
-  { href: "/assistant", label: "AI advisor" },
-  { href: "/#how-it-works", label: "How it works" },
-];
+import { accountMenuLinks, homeForRole, primaryNavLinks } from "@/lib/user";
 
 // Highlight the section the user is in. Anchor links to the homepage (e.g.
 // "/#how-it-works") never count as a location. A route is active on its own page
@@ -32,15 +26,23 @@ export function Navbar() {
   const pathname = usePathname();
   const { status, isAuthenticated, user, signOut } = useAuth();
 
+  // The logo takes you "home" — for a signed-in user that is their own area,
+  // not the guest marketing page.
+  const homeHref = isAuthenticated && user ? homeForRole(user.role) : "/";
+
+  // Marketing/shopping links are for guests and customers. Admins and providers
+  // navigate inside their own portals, so their top bar carries no nav links.
+  const navLinks = primaryNavLinks(isAuthenticated && user ? user.role : null);
+
   return (
-    <header className="sticky top-0 z-50 border-b border-line bg-white/85 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-line bg-card/85 backdrop-blur">
       <Container className="flex h-16 items-center justify-between gap-4">
-        <Link href="/" aria-label="Bimaya home" className="flex items-center">
+        <Link href={homeHref} aria-label="Bimaya home" className="flex items-center">
           <Logo height={34} priority />
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
-          {NAV_LINKS.map((link) => {
+          {navLinks.map((link) => {
             const active = isActive(pathname, link.href);
             return (
               <Link
@@ -61,6 +63,7 @@ export function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
+          <ThemeToggle />
           {status === "loading" ? (
             // Reserve the space so the header does not jump once the session
             // has been restored from the refresh cookie.
@@ -85,44 +88,47 @@ export function Navbar() {
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-label="Toggle menu"
-          aria-expanded={open}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-ink transition-colors hover:bg-surface md:hidden"
-        >
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.8}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+        <div className="flex items-center gap-1 md:hidden">
+          <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-label="Toggle menu"
+            aria-expanded={open}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-ink transition-colors hover:bg-surface"
           >
-            {open ? (
-              <>
-                <path d="M18 6 6 18" />
-                <path d="m6 6 12 12" />
-              </>
-            ) : (
-              <>
-                <path d="M4 6h16" />
-                <path d="M4 12h16" />
-                <path d="M4 18h16" />
-              </>
-            )}
-          </svg>
-        </button>
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              {open ? (
+                <>
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </>
+              ) : (
+                <>
+                  <path d="M4 6h16" />
+                  <path d="M4 12h16" />
+                  <path d="M4 18h16" />
+                </>
+              )}
+            </svg>
+          </button>
+        </div>
       </Container>
 
       {open && (
-        <div className="border-t border-line bg-white md:hidden">
+        <div className="border-t border-line bg-card md:hidden">
           <Container className="flex flex-col gap-1 py-3">
-            {NAV_LINKS.map((link) => {
+            {navLinks.map((link) => {
               const active = isActive(pathname, link.href);
               return (
                 <Link
@@ -142,64 +148,33 @@ export function Navbar() {
               );
             })}
             {isAuthenticated && user ? (
-              <div className="mt-2 space-y-1 border-t border-line pt-3">
+              <div
+                className={cn(
+                  "space-y-1",
+                  navLinks.length > 0 && "mt-2 border-t border-line pt-3",
+                )}
+              >
                 <p className="px-3 pb-1 text-xs text-muted">
                   Signed in as{" "}
                   <span className="font-medium text-ink">{user.email}</span>
                 </p>
-                <Link
-                  href="/dashboard"
-                  onClick={() => setOpen(false)}
-                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/dashboard/policies"
-                  onClick={() => setOpen(false)}
-                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
-                >
-                  My policies
-                </Link>
-                <Link
-                  href="/dashboard/claims"
-                  onClick={() => setOpen(false)}
-                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
-                >
-                  My claims
-                </Link>
-                <Link
-                  href="/dashboard/notifications"
-                  onClick={() => setOpen(false)}
-                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
-                >
-                  Notifications
-                </Link>
-                {user.role === "PROVIDER" && (
+                {accountMenuLinks(user).map((link) => (
                   <Link
-                    href="/provider"
+                    key={link.href}
+                    href={link.href}
                     onClick={() => setOpen(false)}
                     className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
                   >
-                    Provider area
+                    {link.label}
                   </Link>
-                )}
-                {user.role === "ADMIN" && (
-                  <Link
-                    href="/admin"
-                    onClick={() => setOpen(false)}
-                    className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
-                  >
-                    Admin panel
-                  </Link>
-                )}
+                ))}
                 <button
                   type="button"
                   onClick={async () => {
                     setOpen(false);
                     await signOut();
                   }}
-                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium text-danger transition-colors hover:bg-danger-surface"
                 >
                   Sign out
                 </button>

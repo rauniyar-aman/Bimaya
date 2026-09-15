@@ -6,6 +6,11 @@ from django.utils.text import slugify
 
 from apps.core.models import TimeStampedModel
 
+# The role catalog lives in rbac.py (the reviewable security policy); it is
+# re-exported here so ``from apps.providers.models import ProviderRole`` keeps
+# working for the model field and existing importers.
+from .rbac import ProviderRole  # noqa: F401  (re-exported)
+
 
 class Provider(TimeStampedModel):
     """An insurance company that lists policies on the marketplace.
@@ -56,6 +61,15 @@ class Provider(TimeStampedModel):
     def __str__(self):
         return self.company_name
 
+    @property
+    def public_id(self):
+        """Human-readable provider identifier, e.g. ``PRV-00142``.
+
+        Derived from the primary key, so it is stable once saved and needs no
+        column of its own. Blank for an unsaved instance.
+        """
+        return f"PRV-{self.pk:05d}" if self.pk else ""
+
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = self._unique_slug()
@@ -71,26 +85,14 @@ class Provider(TimeStampedModel):
         return slug
 
 
-class ProviderRole(models.TextChoices):
-    """A person's role within a provider organisation.
-
-    ``OWNER`` is the account the provider profile is bound to
-    (``Provider.user``) and is not stored as a membership row. ``STAFF`` and
-    ``VIEWER`` are extra people, added by a platform admin and recorded as
-    :class:`ProviderMembership`.
-    """
-
-    OWNER = "OWNER", "Owner"
-    STAFF = "STAFF", "Staff"
-    VIEWER = "VIEWER", "Viewer"
-
-
 class ProviderMembership(TimeStampedModel):
-    """Links an extra staff or viewer user to a provider organisation.
+    """Links an added staff member to a provider organisation.
 
-    The organisation's owner is ``Provider.user``; this model holds everyone
-    else. A user belongs to at most one provider (``user`` is one-to-one), and
-    membership is managed by platform admins — never self-service.
+    The organisation's owner is ``Provider.user`` (implicit role
+    :data:`~apps.providers.rbac.OWNER`); this model holds everyone else, each
+    with one assignable :class:`~apps.providers.rbac.ProviderRole`. A user belongs
+    to at most one provider (``user`` is one-to-one). Membership is managed by
+    the organisation's own Owner / Company Admin, and by platform admins.
     """
 
     provider = models.ForeignKey(
@@ -103,11 +105,8 @@ class ProviderMembership(TimeStampedModel):
     )
     role = models.CharField(
         max_length=20,
-        choices=[
-            (ProviderRole.STAFF, ProviderRole.STAFF.label),
-            (ProviderRole.VIEWER, ProviderRole.VIEWER.label),
-        ],
-        default=ProviderRole.STAFF,
+        choices=ProviderRole.choices,
+        default=ProviderRole.FINANCE_VIEWER,
         help_text="Owners are not stored here; the owner is Provider.user.",
     )
 

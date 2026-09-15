@@ -19,8 +19,13 @@ User = get_user_model()
 
 
 class AdminProviderSerializer(serializers.ModelSerializer):
-    """Provider row for the admin approvals table, with the owning account."""
+    """Provider row for the admin approvals table, with the owning account.
 
+    ``public_id`` is the human-readable organisation identifier (``PRV-00142``),
+    derived from the primary key.
+    """
+
+    public_id = serializers.CharField(read_only=True)
     owner_email = serializers.EmailField(source="user.email", read_only=True)
     owner_name = serializers.CharField(source="user.full_name", read_only=True)
     policy_count = serializers.IntegerField(read_only=True)
@@ -29,6 +34,7 @@ class AdminProviderSerializer(serializers.ModelSerializer):
         model = Provider
         fields = (
             "id",
+            "public_id",
             "company_name",
             "slug",
             "registration_number",
@@ -134,14 +140,14 @@ class AdminUserDetailSerializer(AdminUserSerializer):
 
 
 class RejectNoteSerializer(serializers.Serializer):
-    """Input for a reject-with-reason action (KYC)."""
+    """Input for a reject-with-reason action (customer or provider KYC)."""
 
     note = serializers.CharField()
 
     def validate_note(self, value):
         value = value.strip()
         if not value:
-            raise serializers.ValidationError("Give the customer a reason.")
+            raise serializers.ValidationError("Give a reason for the rejection.")
         return value
 
 
@@ -206,19 +212,18 @@ class AdminPolicySerializer(PolicyListSerializer):
 
 
 # Roles an admin may assign to an added member — the owner is set at onboarding
-# (it is ``Provider.user``) and is never created through the members API.
-MEMBER_ROLE_CHOICES = (
-    (ProviderRole.STAFF.value, ProviderRole.STAFF.label),
-    (ProviderRole.VIEWER.value, ProviderRole.VIEWER.label),
-)
+# (it is ``Provider.user``) and is never created through the members API. These
+# are exactly the assignable provider roles (:class:`~apps.providers.rbac.ProviderRole`);
+# ``OWNER`` is an implicit sentinel, never assigned here.
+MEMBER_ROLE_CHOICES = ProviderRole.choices
 
 
 class ProviderMemberSerializer(serializers.Serializer):
     """One person in a provider organisation — the owner or an added member.
 
     A uniform people-list row: the owner (``membership_id`` null, role
-    ``OWNER``) and each staff/viewer membership, so the admin UI can render the
-    whole team from a single shape.
+    ``OWNER``) and each added membership with its assignable role, so the admin
+    UI can render the whole team from a single shape.
     """
 
     user_id = serializers.IntegerField(read_only=True)
@@ -231,11 +236,11 @@ class ProviderMemberSerializer(serializers.Serializer):
 
 
 class ProviderMemberCreateSerializer(serializers.Serializer):
-    """Admin input to add a staff/viewer to a provider organisation.
+    """Admin input to add a member to a provider organisation.
 
     Creates a verified provider-role account with a temporary password and links
     it to the organisation; the person signs in with the normal login + OTP.
-    Only staff/viewer roles are accepted — owners are set at onboarding.
+    Only the assignable roles are accepted — owners are set at onboarding.
     """
 
     email = serializers.EmailField()
@@ -255,6 +260,6 @@ class ProviderMemberCreateSerializer(serializers.Serializer):
 
 
 class ProviderMemberRoleSerializer(serializers.Serializer):
-    """Admin input to change an existing member's role (staff ↔ viewer)."""
+    """Admin input to change an existing member's assignable role."""
 
     role = serializers.ChoiceField(choices=MEMBER_ROLE_CHOICES)

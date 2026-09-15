@@ -21,6 +21,10 @@ from .views import (
     AdminProviderListView,
     AdminProviderMemberDetailView,
     AdminProviderMemberListCreateView,
+    AdminProviderKycDocumentView,
+    AdminProviderKycListView,
+    AdminProviderKycRejectView,
+    AdminProviderKycVerifyView,
     AdminProviderReportView,
     AdminProviderRevokeView,
     AdminProviderSetCommissionView,
@@ -66,6 +70,27 @@ urlpatterns = [
         "providers/<int:pk>/members/<int:membership_pk>/",
         AdminProviderMemberDetailView.as_view(),
         name="admin-provider-member-detail",
+    ),
+    # Provider KYC documents
+    path(
+        "providers/<int:pk>/kyc/",
+        AdminProviderKycListView.as_view(),
+        name="admin-provider-kyc-list",
+    ),
+    path(
+        "providers/<int:pk>/kyc/<int:document_pk>/document/",
+        AdminProviderKycDocumentView.as_view(),
+        name="admin-provider-kyc-document",
+    ),
+    path(
+        "providers/<int:pk>/kyc/<int:document_pk>/verify/",
+        AdminProviderKycVerifyView.as_view(),
+        name="admin-provider-kyc-verify",
+    ),
+    path(
+        "providers/<int:pk>/kyc/<int:document_pk>/reject/",
+        AdminProviderKycRejectView.as_view(),
+        name="admin-provider-kyc-reject",
     ),
     # KYC
     path("kyc/", AdminKycListView.as_view(), name="admin-kyc-list"),

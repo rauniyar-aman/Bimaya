@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { errorCode, errorMessage, fieldErrors } from "@/lib/api";
 import { safeNext } from "@/lib/redirect";
+import { homeForRole } from "@/lib/user";
 
 /** Notices set by the screen the user just came from. */
 const NOTICES: Record<string, string> = {
@@ -26,7 +27,7 @@ export function LoginForm() {
   const params = useSearchParams();
   const { signIn } = useAuth();
 
-  const next = safeNext(params.get("next"));
+  const rawNext = params.get("next");
   const notice = NOTICES[params.get("notice") ?? ""];
 
   const [email, setEmail] = useState("");
@@ -42,15 +43,15 @@ export function LoginForm() {
     setPending(true);
 
     try {
-      await signIn(email.trim().toLowerCase(), password);
-      router.replace(next);
+      const user = await signIn(email.trim().toLowerCase(), password);
+      // Send each role to its own home unless a protected page asked for a
+      // specific destination via ?next=.
+      router.replace(rawNext ? safeNext(rawNext) : homeForRole(user.role));
     } catch (error) {
       // An unverified account is a detour, not a failure — send them to finish.
       if (errorCode(error) === "account_unverified") {
-        const query = new URLSearchParams({
-          email: email.trim().toLowerCase(),
-          next,
-        });
+        const query = new URLSearchParams({ email: email.trim().toLowerCase() });
+        if (rawNext) query.set("next", rawNext);
         router.push(`/verify-otp?${query}`);
         return;
       }

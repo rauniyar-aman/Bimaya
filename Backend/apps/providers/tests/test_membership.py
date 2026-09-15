@@ -1,11 +1,14 @@
-"""Access-control tests for provider team members (owner / staff / viewer).
+"""Access-control tests for provider team members under the granular RBAC.
 
 A provider organisation can have several accounts: the owner is
-``Provider.user``; staff and viewers are :class:`ProviderMembership` rows.
-Writes are gated by role in
-:class:`~apps.providers.access.IsProviderTeamMember` — owners and staff may
-change things, viewers are read-only, and only the owner may edit the company
-profile. Every member is scoped to their own organisation's objects.
+``Provider.user`` (the implicit ``OWNER`` role, always full control); added
+members are :class:`ProviderMembership` rows, each holding one assignable role.
+Access is gated per-permission by
+:class:`~apps.providers.access.HasProviderPermission` against the code matrix in
+:mod:`apps.providers.rbac`. The important behaviour change from the old
+owner/staff/viewer scheme is that **reads are role-scoped** — a Claims Officer
+cannot list policies, a Finance Viewer is read-only — and every member is still
+scoped to their own organisation's objects.
 """
 
 from decimal import Decimal
@@ -18,6 +21,7 @@ from rest_framework.test import APITestCase
 
 from apps.policies.models import InsuranceCategory, Policy
 from apps.providers.models import Provider, ProviderMembership, ProviderRole
+from apps.providers.rbac import OWNER
 
 User = get_user_model()
 
@@ -43,15 +47,16 @@ class ProviderTeamAccessTests(APITestCase):
         self.provider = Provider.objects.create(
             user=self.owner, company_name="Everest Life", is_approved=True
         )
-        self.staff = make_provider_user("staff@bimaya.test")
-        ProviderMembership.objects.create(
-            provider=self.provider, user=self.staff, role=ProviderRole.STAFF
-        )
-        self.viewer = make_provider_user("viewer@bimaya.test")
-        ProviderMembership.objects.create(
-            provider=self.provider, user=self.viewer, role=ProviderRole.VIEWER
-        )
+        self.company_admin = self._member("admin@bimaya.test", ProviderRole.COMPANY_ADMIN)
+        self.policy_manager = self._member("policy@bimaya.test", ProviderRole.POLICY_MANAGER)
+        self.claims_officer = self._member("claims@bimaya.test", ProviderRole.CLAIMS_OFFICER)
+        self.finance_viewer = self._member("finance@bimaya.test", ProviderRole.FINANCE_VIEWER)
         self.category = InsuranceCategory.objects.create(name="Vehicle")
+
+    def _member(self, email, role):
+        user = make_provider_user(email)
+        ProviderMembership.objects.create(provider=self.provider, user=user, role=role)
+        return user
 
     def _policy(self, **kwargs):
         defaults = {
@@ -75,20 +80,32 @@ class ProviderTeamAccessTests(APITestCase):
             "term_months": 12,
         }
 
-    # --- reads: every member of the organisation may read ------------------
+    # --- reads: now scoped to roles holding policy.view --------------------
 
-    def test_all_members_can_list_policies(self):
+    def test_policy_view_holders_can_list_policies(self):
         self._policy()
-        for member in (self.owner, self.staff, self.viewer):
+        for member in (
+            self.owner,
+            self.company_admin,
+            self.policy_manager,
+            self.finance_viewer,
+        ):
             self.client.force_authenticate(member)
             response = self.client.get(reverse("provider-policy-list"))
             self.assertEqual(response.status_code, status.HTTP_200_OK, member.email)
             self.assertEqual(response.data["count"], 1, member.email)
 
-    # --- writes: owner/staff may write, viewers may not --------------------
+    def test_claims_officer_cannot_list_policies(self):
+        # A Claims Officer holds no policy.view — the read is now role-scoped.
+        self._policy()
+        self.client.force_authenticate(self.claims_officer)
+        response = self.client.get(reverse("provider-policy-list"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_staff_can_create_policy(self):
-        self.client.force_authenticate(self.staff)
+    # --- writes: policy roles may write, finance is read-only --------------
+
+    def test_policy_manager_can_create_policy(self):
+        self.client.force_authenticate(self.policy_manager)
         response = self.client.post(
             reverse("provider-policy-list"), self._create_payload()
         )
@@ -97,44 +114,46 @@ class ProviderTeamAccessTests(APITestCase):
             Policy.objects.filter(provider=self.provider, name="New Plan").exists()
         )
 
-    def test_viewer_cannot_create_policy(self):
-        self.client.force_authenticate(self.viewer)
+    def test_finance_viewer_cannot_create_policy(self):
+        self.client.force_authenticate(self.finance_viewer)
         response = self.client.post(
             reverse("provider-policy-list"), self._create_payload()
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(Policy.objects.filter(name="New Plan").exists())
 
-    def test_staff_can_submit_policy_but_viewer_cannot(self):
+    def test_policy_manager_can_submit_but_finance_cannot(self):
         policy = self._policy(status=Policy.Status.DRAFT)
         url = reverse("provider-policy-submit", args=[policy.id])
 
-        self.client.force_authenticate(self.viewer)
+        self.client.force_authenticate(self.finance_viewer)
         self.assertEqual(self.client.post(url).status_code, status.HTTP_403_FORBIDDEN)
 
-        self.client.force_authenticate(self.staff)
+        self.client.force_authenticate(self.policy_manager)
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         policy.refresh_from_db()
         self.assertEqual(policy.status, Policy.Status.PENDING)
 
-    def test_staff_can_deactivate_policy_but_viewer_cannot(self):
+    def test_policy_manager_can_deactivate_but_finance_cannot(self):
         policy = self._policy(status=Policy.Status.APPROVED)
         url = reverse("provider-policy-deactivate", args=[policy.id])
 
-        self.client.force_authenticate(self.viewer)
+        self.client.force_authenticate(self.finance_viewer)
         self.assertEqual(self.client.post(url).status_code, status.HTTP_403_FORBIDDEN)
 
-        self.client.force_authenticate(self.staff)
+        self.client.force_authenticate(self.policy_manager)
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         policy.refresh_from_db()
         self.assertEqual(policy.status, Policy.Status.INACTIVE)
 
-    def test_viewer_cannot_issue_or_decide_claims(self):
-        # The role gate rejects a viewer before any object lookup, so a bogus id
-        # is enough to prove the write is blocked.
-        self.client.force_authenticate(self.viewer)
+    # --- feature isolation: policy vs claims roles do not overlap ----------
+
+    def test_claims_officer_passes_claim_gate_but_cannot_issue(self):
+        # Claims Officer clears the claim.decide gate (bogus id then 404s) but
+        # holds no issuance.issue, so issuance is refused at the gate.
+        self.client.force_authenticate(self.claims_officer)
         issue = self.client.post(
             reverse("provider-issuance-issue", args=[999]), {"policy_number": "X"}
         )
@@ -144,12 +163,12 @@ class ProviderTeamAccessTests(APITestCase):
             {"approved_amount": "1.00"},
             format="json",
         )
-        self.assertEqual(approve.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(approve.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_staff_passes_the_role_gate_on_issue_and_claims(self):
-        # Staff clear the role gate; the bogus id then 404s — proving the block a
-        # viewer hits above is the role gate, not the endpoint itself.
-        self.client.force_authenticate(self.staff)
+    def test_policy_manager_passes_issue_gate_but_cannot_decide_claims(self):
+        # The mirror image: Policy Manager clears issuance.issue (bogus id 404s)
+        # but holds no claim.decide, so approving a claim is refused at the gate.
+        self.client.force_authenticate(self.policy_manager)
         issue = self.client.post(
             reverse("provider-issuance-issue", args=[999]), {"policy_number": "X"}
         )
@@ -159,15 +178,17 @@ class ProviderTeamAccessTests(APITestCase):
             {"approved_amount": "1.00"},
             format="json",
         )
-        self.assertEqual(approve.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(approve.status_code, status.HTTP_403_FORBIDDEN)
 
-    # --- profile: any member reads, only the owner edits -------------------
+    # --- profile: any member reads, only company.edit holders edit ---------
 
     def test_my_role_reflects_each_member(self):
         expected = {
-            self.owner: ProviderRole.OWNER.value,
-            self.staff: ProviderRole.STAFF.value,
-            self.viewer: ProviderRole.VIEWER.value,
+            self.owner: OWNER,
+            self.company_admin: ProviderRole.COMPANY_ADMIN.value,
+            self.policy_manager: ProviderRole.POLICY_MANAGER.value,
+            self.claims_officer: ProviderRole.CLAIMS_OFFICER.value,
+            self.finance_viewer: ProviderRole.FINANCE_VIEWER.value,
         }
         for member, role in expected.items():
             self.client.force_authenticate(member)
@@ -175,20 +196,31 @@ class ProviderTeamAccessTests(APITestCase):
             self.assertEqual(response.status_code, status.HTTP_200_OK, member.email)
             self.assertEqual(response.data["my_role"], role, member.email)
 
-    def test_only_owner_can_edit_profile(self):
+    def test_owner_and_company_admin_can_edit_profile_others_cannot(self):
         url = reverse("provider-profile")
-        for member in (self.staff, self.viewer):
+        for member in (self.policy_manager, self.claims_officer, self.finance_viewer):
             self.client.force_authenticate(member)
             response = self.client.patch(url, {"support_phone": "+977-1-4000000"})
             self.assertEqual(
                 response.status_code, status.HTTP_403_FORBIDDEN, member.email
             )
 
-        self.client.force_authenticate(self.owner)
-        response = self.client.patch(url, {"support_phone": "+977-1-4000000"})
+        for member in (self.company_admin, self.owner):
+            self.client.force_authenticate(member)
+            response = self.client.patch(url, {"support_phone": "+977-1-4000000"})
+            self.assertEqual(response.status_code, status.HTTP_200_OK, member.email)
+
+    def test_company_admin_editing_profile_does_not_steal_ownership(self):
+        # Regression guard: company.edit lets a Company Admin update the profile,
+        # but the owning account must stay the original owner.
+        self.client.force_authenticate(self.company_admin)
+        response = self.client.patch(
+            reverse("provider-profile"), {"support_phone": "+977-1-5550000"}
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.provider.refresh_from_db()
-        self.assertEqual(self.provider.support_phone, "+977-1-4000000")
+        self.assertEqual(self.provider.user_id, self.owner.id)
+        self.assertEqual(self.provider.support_phone, "+977-1-5550000")
 
     # --- scoping: a member sees only their own organisation ----------------
 
@@ -208,7 +240,7 @@ class ProviderTeamAccessTests(APITestCase):
             status=Policy.Status.APPROVED,
         )
 
-        self.client.force_authenticate(self.staff)
+        self.client.force_authenticate(self.company_admin)
         listing = self.client.get(reverse("provider-policy-list"))
         names = {row["name"] for row in listing.data["results"]}
         self.assertEqual(names, {"Mine"})

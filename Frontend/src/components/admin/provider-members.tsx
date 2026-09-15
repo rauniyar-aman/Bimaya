@@ -17,6 +17,7 @@ import {
   errorMessage,
   fieldErrors,
   type AdminProvider,
+  type AssignableProviderRole,
   type ProviderMember,
   type ProviderRole,
 } from "@/lib/api";
@@ -24,12 +25,24 @@ import { formatDate } from "@/lib/date";
 
 const ROLE_META: Record<
   ProviderRole,
-  { variant: "active" | "info" | "pending"; label: string }
+  { variant: "active" | "info"; label: string }
 > = {
   OWNER: { variant: "active", label: "Owner" },
-  STAFF: { variant: "info", label: "Staff" },
-  VIEWER: { variant: "pending", label: "Viewer" },
+  COMPANY_ADMIN: { variant: "info", label: "Company Admin" },
+  POLICY_MANAGER: { variant: "info", label: "Policy Manager" },
+  CLAIMS_OFFICER: { variant: "info", label: "Claims Officer" },
+  SALES_MANAGER: { variant: "info", label: "Sales Manager" },
+  FINANCE_VIEWER: { variant: "info", label: "Finance Viewer" },
 };
+
+/** The roles an admin can assign to a member, with a short reach descriptor. */
+const ASSIGNABLE_ROLES: { value: AssignableProviderRole; hint: string }[] = [
+  { value: "COMPANY_ADMIN", hint: "full access" },
+  { value: "POLICY_MANAGER", hint: "policies & issuance" },
+  { value: "CLAIMS_OFFICER", hint: "claims" },
+  { value: "SALES_MANAGER", hint: "sales & analytics" },
+  { value: "FINANCE_VIEWER", hint: "read-only finance" },
+];
 
 type State =
   | { phase: "loading" }
@@ -38,7 +51,8 @@ type State =
 
 /**
  * Admin dialog to manage a provider organisation's team: the read-only owner
- * plus staff/viewers who can be added, re-roled, or removed. Opened from a row
+ * plus members who can be added, re-roled, or removed. Each member holds one
+ * feature-scoped role (Company Admin down to Finance Viewer). Opened from a row
  * in {@link ProviderApprovals} so no dedicated route is needed.
  */
 export function ProviderMembersModal({
@@ -57,7 +71,7 @@ export function ProviderMembersModal({
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"STAFF" | "VIEWER">("STAFF");
+  const [role, setRole] = useState<AssignableProviderRole | "">("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
   const [adding, setAdding] = useState(false);
@@ -113,6 +127,10 @@ export function ProviderMembersModal({
     event.preventDefault();
     setErrors({});
     setFormError("");
+    if (!role) {
+      setErrors({ role: "Choose a role for this member." });
+      return;
+    }
     setAdding(true);
     try {
       const member = await api.admin.addProviderMember(authFetch, provider.id, {
@@ -125,7 +143,7 @@ export function ProviderMembersModal({
       setEmail("");
       setFullName("");
       setPassword("");
-      setRole("STAFF");
+      setRole("");
     } catch (error) {
       setErrors(fieldErrors(error));
       setFormError(errorMessage(error, "Could not add this team member."));
@@ -134,7 +152,7 @@ export function ProviderMembersModal({
     }
   }
 
-  async function changeRole(member: ProviderMember, next: "STAFF" | "VIEWER") {
+  async function changeRole(member: ProviderMember, next: AssignableProviderRole) {
     if (member.membership_id === null || member.role === next) return;
     setBusyId(member.user_id);
     setRowError("");
@@ -180,8 +198,8 @@ export function ProviderMembersModal({
         <div className="space-y-5">
           <p className="text-sm text-muted">
             The owner signs in as the organisation and cannot be changed here.
-            Staff can manage policies, issuance, and claims; viewers have
-            read-only access.
+            Every other member holds one feature-scoped role — from Company Admin
+            (full access) down to Finance Viewer (read-only).
           </p>
 
           {state.phase === "loading" && (
@@ -240,15 +258,18 @@ export function ProviderMembersModal({
                               onChange={(e) =>
                                 changeRole(
                                   member,
-                                  e.target.value as "STAFF" | "VIEWER",
+                                  e.target.value as AssignableProviderRole,
                                 )
                               }
                               disabled={busy}
-                              className="w-32"
+                              className="w-52"
                               aria-label={`Role for ${member.email}`}
                             >
-                              <option value="STAFF">Staff</option>
-                              <option value="VIEWER">Viewer</option>
+                              {ASSIGNABLE_ROLES.map((r) => (
+                                <option key={r.value} value={r.value}>
+                                  {ROLE_META[r.value].label}
+                                </option>
+                              ))}
                             </Select>
                           )}
                         </TD>
@@ -333,16 +354,23 @@ export function ProviderMembersModal({
                     />
                   </Field>
 
-                  <Field label="Role" htmlFor="member_role" error={errors.role}>
+                  <Field label="Role" htmlFor="member_role" error={errors.role} required>
                     <Select
                       id="member_role"
                       value={role}
                       onChange={(e) =>
-                        setRole(e.target.value as "STAFF" | "VIEWER")
+                        setRole(e.target.value as AssignableProviderRole)
                       }
+                      aria-invalid={Boolean(errors.role)}
                     >
-                      <option value="STAFF">Staff — can manage</option>
-                      <option value="VIEWER">Viewer — read-only</option>
+                      <option value="" disabled>
+                        Choose a role…
+                      </option>
+                      {ASSIGNABLE_ROLES.map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {ROLE_META[r.value].label} — {r.hint}
+                        </option>
+                      ))}
                     </Select>
                   </Field>
                 </div>

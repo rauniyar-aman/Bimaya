@@ -32,7 +32,8 @@ from apps.core.permissions import (
     IsVerified,
 )
 from apps.notifications import services as notifications
-from apps.providers.access import IsProviderTeamMember, provider_for
+from apps.providers.access import HasProviderPermission, provider_for
+from apps.providers.rbac import ProviderPerm
 
 from .exceptions import (
     ClaimNotDecidable,
@@ -197,12 +198,14 @@ class ProviderClaimBase:
     """Shared configuration for a provider working their claims queue.
 
     Scoped to claims against the acting user's provider organisation — never
-    another provider's — so ownership is enforced by the queryset itself. An
-    owner and their staff / viewers share the queue; the decision actions are
-    gated by role in :class:`~apps.providers.access.IsProviderTeamMember`.
+    another provider's — so ownership is enforced by the queryset itself. Access
+    is gated by :class:`~apps.providers.access.HasProviderPermission`; each
+    concrete view declares the granular ``claim.*`` permission it needs (reads
+    default to ``claim.view``).
     """
 
-    permission_classes = [IsProviderTeamMember]
+    permission_classes = [HasProviderPermission]
+    required_permission = ProviderPerm.CLAIM_VIEW
     serializer_class = ClaimSerializer
     filterset_fields = ["status"]
 
@@ -243,6 +246,7 @@ class ProviderClaimMessageCreateView(ProviderClaimBase, GenericAPIView):
     """Provider posts a message to a claim thread on one of their policies and
     the customer is notified."""
 
+    required_permission = ProviderPerm.CLAIM_MESSAGE
     serializer_class = ClaimMessageCreateSerializer
 
     def post(self, request, pk):
@@ -267,6 +271,8 @@ class ProviderClaimMessageCreateView(ProviderClaimBase, GenericAPIView):
     responses=ClaimSerializer,
 )
 class ProviderClaimStartReviewView(ProviderClaimBase, GenericAPIView):
+    required_permission = ProviderPerm.CLAIM_REVIEW
+
     def post(self, request, pk):
         claim = self.get_claim(pk)
         if claim.status != Claim.Status.SUBMITTED:
@@ -283,6 +289,7 @@ class ProviderClaimStartReviewView(ProviderClaimBase, GenericAPIView):
     responses=ClaimSerializer,
 )
 class ProviderClaimRequestInfoView(ProviderClaimBase, GenericAPIView):
+    required_permission = ProviderPerm.CLAIM_DECIDE
     serializer_class = ClaimRequestInfoSerializer
 
     def post(self, request, pk):
@@ -303,6 +310,7 @@ class ProviderClaimRequestInfoView(ProviderClaimBase, GenericAPIView):
     responses=ClaimSerializer,
 )
 class ProviderClaimApproveView(ProviderClaimBase, GenericAPIView):
+    required_permission = ProviderPerm.CLAIM_DECIDE
     serializer_class = ClaimApproveSerializer
 
     def post(self, request, pk):
@@ -326,6 +334,7 @@ class ProviderClaimApproveView(ProviderClaimBase, GenericAPIView):
     responses=ClaimSerializer,
 )
 class ProviderClaimRejectView(ProviderClaimBase, GenericAPIView):
+    required_permission = ProviderPerm.CLAIM_DECIDE
     serializer_class = ClaimRejectSerializer
 
     def post(self, request, pk):
@@ -345,6 +354,7 @@ class ProviderClaimRejectView(ProviderClaimBase, GenericAPIView):
     request=ClaimPayoutInitiateSerializer,
 )
 class ProviderClaimPayoutInitiateView(ProviderClaimBase, GenericAPIView):
+    required_permission = ProviderPerm.CLAIM_PAYOUT
     serializer_class = ClaimPayoutInitiateSerializer
 
     def post(self, request, pk):
@@ -385,6 +395,7 @@ class ProviderClaimPayoutInitiateView(ProviderClaimBase, GenericAPIView):
     responses=ClaimSerializer,
 )
 class ProviderClaimPayoutConfirmView(ProviderClaimBase, GenericAPIView):
+    required_permission = ProviderPerm.CLAIM_PAYOUT
     serializer_class = ClaimPayoutConfirmSerializer
 
     def post(self, request, pk):

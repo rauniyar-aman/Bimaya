@@ -21,7 +21,8 @@ from apps.core.permissions import (
     IsVerified,
 )
 from apps.notifications import services as notifications
-from apps.providers.access import IsProviderTeamMember, provider_for
+from apps.providers.access import HasProviderPermission, provider_for
+from apps.providers.rbac import ProviderPerm
 from apps.payments.models import Payment
 
 from . import pdf
@@ -169,12 +170,13 @@ class ProviderIssuanceBase:
     """Shared helpers for a provider working their issuance queue.
 
     Scoped to purchases of the acting user's provider organisation — never any
-    other provider's — so ownership is enforced by the queryset itself. An owner
-    and their staff / viewers share the queue; issuing is gated by role in
-    :class:`~apps.providers.access.IsProviderTeamMember`.
+    other provider's — so ownership is enforced by the queryset itself. Access
+    is gated by :class:`~apps.providers.access.HasProviderPermission`; each
+    concrete view declares the granular permission it needs.
     """
 
-    permission_classes = [IsProviderTeamMember]
+    permission_classes = [HasProviderPermission]
+    required_permission = ProviderPerm.ISSUANCE_VIEW
     serializer_class = PolicyPurchaseSerializer
 
     def get_provider(self):
@@ -191,6 +193,8 @@ class ProviderIssuanceBase:
 
 @extend_schema(tags=PURCHASE_TAG, summary="List purchases awaiting issuance")
 class ProviderIssuanceListView(ProviderIssuanceBase, ListAPIView):
+    required_permission = ProviderPerm.ISSUANCE_VIEW
+
     def get_queryset(self):
         return super().get_queryset().filter(status=PolicyPurchase.Status.FORWARDED)
 
@@ -201,6 +205,7 @@ class ProviderPurchaseListView(ProviderIssuanceBase, ListAPIView):
     policies — the full funnel, not just the issuance queue — filterable by
     status and searchable by policy name or number."""
 
+    required_permission = ProviderPerm.PURCHASE_VIEW
     serializer_class = ProviderPurchaseSerializer
     filterset_fields = ["status"]
     search_fields = ["policy__name", "policy_number"]
@@ -217,6 +222,7 @@ class ProviderPayoutListView(ProviderIssuanceBase, ListAPIView):
     Scoped to the provider's own payouts by the queryset, so no cross-provider
     leakage. Filterable by settlement status, searchable by policy name/number."""
 
+    required_permission = ProviderPerm.PAYOUT_VIEW
     serializer_class = ProviderPayoutSerializer
     filterset_fields = ["status"]
     search_fields = ["purchase__policy__name", "purchase__policy_number"]
@@ -240,6 +246,7 @@ class ProviderPayoutListView(ProviderIssuanceBase, ListAPIView):
     responses=PolicyPurchaseSerializer,
 )
 class ProviderIssueView(ProviderIssuanceBase, GenericAPIView):
+    required_permission = ProviderPerm.ISSUANCE_ISSUE
     serializer_class = PolicyIssueSerializer
 
     def post(self, request, pk):

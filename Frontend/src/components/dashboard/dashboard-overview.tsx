@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Container } from "@/components/layout/container";
@@ -18,7 +19,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { StatusPill } from "@/components/ui/status-pill";
 import { api, type PolicyPurchase } from "@/lib/api";
 import { formatDate } from "@/lib/date";
-import { ROLE_LABELS, firstName } from "@/lib/user";
+import { ROLE_LABELS, firstName, homeForRole } from "@/lib/user";
 
 /** How many recent purchases the dashboard previews before "View all". */
 const PREVIEW_COUNT = 3;
@@ -47,9 +48,19 @@ const NEXT_STEPS = [
 
 export function DashboardOverview() {
   const { user, authFetch } = useAuth();
+  const router = useRouter();
   const [policies, setPolicies] = useState<PoliciesState>({ phase: "loading" });
 
+  // This is the customer dashboard. Admins and providers have their own home
+  // areas, so forward them there instead of showing an empty customer shell.
+  const isCustomer = user?.role === "CUSTOMER";
+
   useEffect(() => {
+    if (user && !isCustomer) router.replace(homeForRole(user.role));
+  }, [user, isCustomer, router]);
+
+  useEffect(() => {
+    if (!isCustomer) return;
     let cancelled = false;
     api.purchases
       .list(authFetch)
@@ -63,9 +74,16 @@ export function DashboardOverview() {
     return () => {
       cancelled = true;
     };
-  }, [authFetch]);
+  }, [authFetch, isCustomer]);
 
   if (!user) return null;
+  if (!isCustomer) {
+    return (
+      <Container className="flex flex-1 items-center justify-center py-24">
+        <Spinner className="h-5 w-5 text-brand-500" />
+      </Container>
+    );
+  }
 
   return (
     <Container className="flex-1 py-10 lg:py-14">

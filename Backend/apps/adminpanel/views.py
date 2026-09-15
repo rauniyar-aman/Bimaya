@@ -1,11 +1,17 @@
 """Admin-panel REST APIs (``/api/v1/admin/...``).
 
 A branded in-app admin area is built on these; the Django admin remains as the
-low-level fallback. Every view requires :class:`IsPlatformAdmin`. Actions that
+low-level fallback. Access is gated by
+:class:`~apps.staff.permissions.HasStaffPermission` — the caller must be a
+platform administrator holding the granular ``required_permission`` each view
+declares. Sensitive, state-changing actions are recorded to the audit log
+(:func:`apps.staff.services.record_audit`). Actions that
 change state reuse the same model methods the Django admin uses
 (``CustomerKyc.mark_verified``/``mark_rejected``, ``PolicyPurchase.forward_to_provider``)
 and dispatch notifications through :mod:`apps.notifications.services`.
 """
+
+import os
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -18,13 +24,16 @@ from rest_framework import status
 from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 
-from apps.core.permissions import IsPlatformAdmin
-from apps.documents.models import CustomerKyc
-from apps.documents.serializers import CustomerKycSerializer
+from apps.documents.models import CustomerKyc, ProviderKyc
+from apps.documents.serializers import CustomerKycSerializer, ProviderKycSerializer
 from apps.notifications import services as notifications
 from apps.policies.models import Policy
-from apps.providers.models import Provider, ProviderMembership, ProviderRole
+from apps.providers.models import Provider, ProviderMembership
+from apps.providers.rbac import OWNER
 from apps.purchases.models import PolicyPurchase, ProviderPayout
+from apps.staff.permissions import HasStaffPermission
+from apps.staff.rbac import Perm
+from apps.staff.services import record_audit
 
 from .analytics import build_admin_analytics
 from .exceptions import (
@@ -54,9 +63,16 @@ ADMIN_TAG = ["admin"]
 
 
 class AdminBase:
-    """Shared configuration for every admin-panel endpoint."""
+    """Shared configuration for every admin-panel endpoint.
 
-    permission_classes = [IsPlatformAdmin]
+    Access is gated by :class:`~apps.staff.permissions.HasStaffPermission`:
+    the caller must be a platform administrator *and* hold the granular
+    ``required_permission`` the view declares. A view that declares none stays
+    administrator-only (never accidentally public).
+    """
+
+    permission_classes = [HasStaffPermission]
+    required_permission = None
 
 
 class CsvExportMixin:
@@ -86,6 +102,7 @@ class CsvExportMixin:
 
 @extend_schema(tags=ADMIN_TAG, summary="List providers")
 class AdminProviderListView(AdminBase, ListAPIView):
+    required_permission = Perm.PROVIDER_VIEW
     serializer_class = AdminProviderSerializer
     filterset_fields = ["is_approved", "kyc_status"]
     search_fields = ["company_name", "user__email"]
@@ -100,6 +117,7 @@ class AdminProviderListView(AdminBase, ListAPIView):
 
 @extend_schema(tags=ADMIN_TAG, summary="Retrieve a provider")
 class AdminProviderDetailView(AdminBase, RetrieveAPIView):
+    required_permission = Perm.PROVIDER_VIEW
     serializer_class = AdminProviderSerializer
 
     def get_queryset(self):
@@ -115,6 +133,7 @@ class AdminProviderDetailView(AdminBase, RetrieveAPIView):
     responses=AdminProviderSerializer,
 )
 class AdminProviderApproveView(AdminBase, GenericAPIView):
+    required_permission = Perm.PROVIDER_APPROVE
     serializer_class = AdminProviderSerializer
 
     def post(self, request, pk):
@@ -123,6 +142,15 @@ class AdminProviderApproveView(AdminBase, GenericAPIView):
             provider.is_approved = True
             provider.save(update_fields=["is_approved", "updated_at"])
             notifications.notify_provider_approved(provider)
+            record_audit(
+                actor=request.user,
+                action=Perm.PROVIDER_APPROVE,
+                module="provider",
+                entity_type="Provider",
+                entity_id=provider.pk,
+                changes={"is_approved": [False, True]},
+                request=request,
+            )
         return Response(self._serialize(provider), status=status.HTTP_200_OK)
 
     @staticmethod
@@ -142,6 +170,7 @@ class AdminProviderApproveView(AdminBase, GenericAPIView):
     responses=AdminProviderSerializer,
 )
 class AdminProviderRevokeView(AdminBase, GenericAPIView):
+    required_permission = Perm.PROVIDER_SUSPEND
     serializer_class = AdminProviderSerializer
 
     def post(self, request, pk):
@@ -149,6 +178,15 @@ class AdminProviderRevokeView(AdminBase, GenericAPIView):
         if provider.is_approved:
             provider.is_approved = False
             provider.save(update_fields=["is_approved", "updated_at"])
+            record_audit(
+                actor=request.user,
+                action=Perm.PROVIDER_SUSPEND,
+                module="provider",
+                entity_type="Provider",
+                entity_id=provider.pk,
+                changes={"is_approved": [True, False]},
+                request=request,
+            )
         return Response(
             AdminProviderApproveView._serialize(provider), status=status.HTTP_200_OK
         )
@@ -167,14 +205,25 @@ class AdminProviderSetCommissionView(AdminBase, GenericAPIView):
     the rate snapshotted when they were created.
     """
 
+    required_permission = Perm.COMMISSION_MANAGE
     serializer_class = AdminProviderCommissionSerializer
 
     def post(self, request, pk):
         provider = get_object_or_404(Provider, pk=pk)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        previous = provider.commission_rate
         provider.commission_rate = serializer.validated_data["commission_rate"]
         provider.save(update_fields=["commission_rate", "updated_at"])
+        record_audit(
+            actor=request.user,
+            action=Perm.COMMISSION_MANAGE,
+            module="commission",
+            entity_type="Provider",
+            entity_id=provider.pk,
+            changes={"commission_rate": [str(previous), str(provider.commission_rate)]},
+            request=request,
+        )
         return Response(
             AdminProviderApproveView._serialize(provider), status=status.HTTP_200_OK
         )
@@ -224,7 +273,7 @@ class AdminProviderMemberBase(AdminBase):
                 "membership_id": None,
                 "email": owner.email,
                 "full_name": owner.full_name,
-                "role": ProviderRole.OWNER.value,
+                "role": OWNER,
                 "is_active": owner.is_active,
                 "date_joined": owner.date_joined,
             }
@@ -239,6 +288,7 @@ class AdminProviderMemberBase(AdminBase):
 class AdminProviderMemberListCreateView(AdminProviderMemberBase, GenericAPIView):
     """List a provider organisation's team, or add a staff/viewer to it."""
 
+    required_permission = Perm.PROVIDER_EDIT
     serializer_class = ProviderMemberCreateSerializer
 
     @extend_schema(
@@ -273,6 +323,15 @@ class AdminProviderMemberListCreateView(AdminProviderMemberBase, GenericAPIView)
             membership = ProviderMembership.objects.create(
                 provider=provider, user=user, role=data["role"]
             )
+        record_audit(
+            actor=request.user,
+            action=Perm.PROVIDER_EDIT,
+            module="provider",
+            entity_type="ProviderMembership",
+            entity_id=membership.pk,
+            changes={"added_member": [None, user.email], "role": [None, data["role"]]},
+            request=request,
+        )
         return Response(
             ProviderMemberSerializer(self._membership_row(membership)).data,
             status=status.HTTP_201_CREATED,
@@ -282,6 +341,7 @@ class AdminProviderMemberListCreateView(AdminProviderMemberBase, GenericAPIView)
 class AdminProviderMemberDetailView(AdminProviderMemberBase, GenericAPIView):
     """Change a member's role, or remove them from the organisation."""
 
+    required_permission = Perm.PROVIDER_EDIT
     serializer_class = ProviderMemberRoleSerializer
 
     @extend_schema(
@@ -324,10 +384,135 @@ class AdminProviderMemberDetailView(AdminProviderMemberBase, GenericAPIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-# --- KYC --------------------------------------------------------------------
+# --- Provider KYC documents -------------------------------------------------
+
+
+class AdminProviderKycBase(AdminBase):
+    """Shared gate and scoping for reviewing a provider's KYC documents.
+
+    Backs :data:`~apps.staff.rbac.Perm.PROVIDER_KYC_REVIEW`. Documents are always
+    resolved scoped to the provider named in the URL, so a document id from
+    another organisation 404s. The files are confidential company paperwork under
+    the git-ignored ``MEDIA_ROOT`` and are served only through the authenticated
+    download endpoint below — never a raw media URL.
+    """
+
+    required_permission = Perm.PROVIDER_KYC_REVIEW
+
+    def get_provider(self):
+        return get_object_or_404(Provider, pk=self.kwargs["pk"])
+
+    def get_document(self):
+        return get_object_or_404(
+            ProviderKyc.objects.select_related("provider", "uploaded_by"),
+            pk=self.kwargs["document_pk"],
+            provider_id=self.kwargs["pk"],
+        )
+
+
+@extend_schema(tags=ADMIN_TAG, summary="List a provider's KYC documents")
+class AdminProviderKycListView(AdminProviderKycBase, GenericAPIView):
+    serializer_class = ProviderKycSerializer
+
+    def get(self, request, pk):
+        provider = self.get_provider()
+        documents = provider.kyc_documents.select_related("uploaded_by").order_by(
+            "-created_at"
+        )
+        return Response(ProviderKycSerializer(documents, many=True).data)
+
+
+class AdminProviderKycDocumentView(AdminProviderKycBase, GenericAPIView):
+    """Stream a provider KYC document file to an administrator.
+
+    Confidential company paperwork, served only through this authenticated,
+    admin-gated endpoint — never a raw media URL. The access is recorded.
+    """
+
+    @extend_schema(
+        tags=ADMIN_TAG,
+        summary="Download a provider KYC document file",
+        responses={200: OpenApiTypes.BINARY},
+    )
+    def get(self, request, pk, document_pk):
+        document = self.get_document()
+        if not document.file:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        record_audit(
+            actor=request.user,
+            action=Perm.PROVIDER_KYC_REVIEW,
+            module="provider.kyc",
+            entity_type="ProviderKyc",
+            entity_id=document.pk,
+            changes={"downloaded": document.document_type},
+            request=request,
+        )
+        return FileResponse(
+            document.file.open("rb"),
+            as_attachment=True,
+            filename=os.path.basename(document.file.name),
+        )
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Verify a provider KYC document",
+    request=None,
+    responses=ProviderKycSerializer,
+)
+class AdminProviderKycVerifyView(AdminProviderKycBase, GenericAPIView):
+    serializer_class = ProviderKycSerializer
+
+    def post(self, request, pk, document_pk):
+        document = self.get_document()
+        document.mark_verified(reviewer=request.user)
+        record_audit(
+            actor=request.user,
+            action=Perm.PROVIDER_KYC_REVIEW,
+            module="provider.kyc",
+            entity_type="ProviderKyc",
+            entity_id=document.pk,
+            changes={"status": [None, document.status]},
+            request=request,
+        )
+        return Response(ProviderKycSerializer(document).data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="Reject a provider KYC document",
+    request=RejectNoteSerializer,
+    responses=ProviderKycSerializer,
+)
+class AdminProviderKycRejectView(AdminProviderKycBase, GenericAPIView):
+    serializer_class = RejectNoteSerializer
+
+    def post(self, request, pk, document_pk):
+        document = self.get_document()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        document.mark_rejected(serializer.validated_data["note"], reviewer=request.user)
+        record_audit(
+            actor=request.user,
+            action=Perm.PROVIDER_KYC_REVIEW,
+            module="provider.kyc",
+            entity_type="ProviderKyc",
+            entity_id=document.pk,
+            changes={"status": [None, document.status]},
+            reason=serializer.validated_data["note"],
+            request=request,
+        )
+        return Response(ProviderKycSerializer(document).data, status=status.HTTP_200_OK)
+
+
+# --- Customer KYC -----------------------------------------------------------
 
 
 class AdminKycBase(AdminBase):
+    # Sensitive by default: reading KYC needs the KYC view permission. The
+    # decision endpoints below narrow this to approve/reject.
+    required_permission = Perm.KYC_VIEW
+
     def get_queryset(self):
         return CustomerKyc.objects.select_related("customer").order_by("-created_at")
 
@@ -352,6 +537,7 @@ class AdminKycDocumentView(AdminKycBase, GenericAPIView):
     media URL. ``side`` is ``front`` or ``back``.
     """
 
+    required_permission = Perm.KYC_DOCUMENT_VIEW
     side = "front"
 
     @extend_schema(
@@ -364,6 +550,16 @@ class AdminKycDocumentView(AdminKycBase, GenericAPIView):
         image = kyc.document_front if self.side == "front" else kyc.document_back
         if not image:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        # Viewing identity documents is PII access — record who looked at what.
+        record_audit(
+            actor=request.user,
+            action=Perm.KYC_DOCUMENT_VIEW,
+            module="kyc",
+            entity_type="CustomerKyc",
+            entity_id=kyc.pk,
+            changes={"side": self.side},
+            request=request,
+        )
         return FileResponse(image.open("rb"))
 
 
@@ -374,12 +570,22 @@ class AdminKycDocumentView(AdminKycBase, GenericAPIView):
     responses=CustomerKycSerializer,
 )
 class AdminKycVerifyView(AdminKycBase, GenericAPIView):
+    required_permission = Perm.KYC_APPROVE
     serializer_class = CustomerKycSerializer
 
     def post(self, request, pk):
         kyc = get_object_or_404(CustomerKyc, pk=pk)
         kyc.mark_verified()
         notifications.notify_kyc_verified(kyc)
+        record_audit(
+            actor=request.user,
+            action=Perm.KYC_APPROVE,
+            module="kyc",
+            entity_type="CustomerKyc",
+            entity_id=kyc.pk,
+            changes={"status": [None, kyc.status]},
+            request=request,
+        )
         return Response(CustomerKycSerializer(kyc).data, status=status.HTTP_200_OK)
 
 
@@ -390,6 +596,7 @@ class AdminKycVerifyView(AdminKycBase, GenericAPIView):
     responses=CustomerKycSerializer,
 )
 class AdminKycRejectView(AdminKycBase, GenericAPIView):
+    required_permission = Perm.KYC_REJECT
     serializer_class = RejectNoteSerializer
 
     def post(self, request, pk):
@@ -398,6 +605,16 @@ class AdminKycRejectView(AdminKycBase, GenericAPIView):
         serializer.is_valid(raise_exception=True)
         kyc.mark_rejected(serializer.validated_data["note"])
         notifications.notify_kyc_rejected(kyc)
+        record_audit(
+            actor=request.user,
+            action=Perm.KYC_REJECT,
+            module="kyc",
+            entity_type="CustomerKyc",
+            entity_id=kyc.pk,
+            changes={"status": [None, kyc.status]},
+            reason=serializer.validated_data["note"],
+            request=request,
+        )
         return Response(CustomerKycSerializer(kyc).data, status=status.HTTP_200_OK)
 
 
@@ -415,6 +632,7 @@ class AdminPurchaseBase(AdminBase):
 
 @extend_schema(tags=ADMIN_TAG, summary="List purchases")
 class AdminPurchaseListView(AdminPurchaseBase, ListAPIView):
+    required_permission = Perm.PURCHASE_VIEW
     filterset_fields = ["status"]
     search_fields = ["customer__email", "policy__name", "policy_number"]
 
@@ -426,6 +644,8 @@ class AdminPurchaseListView(AdminPurchaseBase, ListAPIView):
     responses=AdminPurchaseSerializer,
 )
 class AdminPurchaseForwardView(AdminPurchaseBase, GenericAPIView):
+    required_permission = Perm.PURCHASE_MANAGE
+
     def post(self, request, pk):
         purchase = get_object_or_404(self.get_queryset(), pk=pk)
         if purchase.status != PolicyPurchase.Status.PAID:
@@ -436,6 +656,15 @@ class AdminPurchaseForwardView(AdminPurchaseBase, GenericAPIView):
             )
         purchase.forward_to_provider()
         notifications.notify_purchase_forwarded(purchase)
+        record_audit(
+            actor=request.user,
+            action=Perm.PURCHASE_MANAGE,
+            module="purchase",
+            entity_type="PolicyPurchase",
+            entity_id=purchase.pk,
+            changes={"status": [PolicyPurchase.Status.PAID, purchase.status]},
+            request=request,
+        )
         return Response(
             AdminPurchaseSerializer(purchase).data, status=status.HTTP_200_OK
         )
@@ -446,6 +675,7 @@ class AdminPurchaseForwardView(AdminPurchaseBase, GenericAPIView):
 
 @extend_schema(tags=ADMIN_TAG, summary="List provider payouts")
 class AdminPayoutListView(AdminBase, ListAPIView):
+    required_permission = Perm.SETTLEMENT_VIEW
     serializer_class = AdminPayoutSerializer
     filterset_fields = ["status", "provider"]
     search_fields = [
@@ -465,6 +695,7 @@ class AdminPayoutListView(AdminBase, ListAPIView):
 
 @extend_schema(tags=ADMIN_TAG, summary="List users")
 class AdminUserListView(AdminBase, ListAPIView):
+    required_permission = Perm.CUSTOMER_VIEW
     serializer_class = AdminUserSerializer
     filterset_fields = ["role", "is_verified", "is_active"]
     search_fields = ["email", "full_name", "phone"]
@@ -475,6 +706,7 @@ class AdminUserListView(AdminBase, ListAPIView):
 
 @extend_schema(tags=ADMIN_TAG, summary="Retrieve a user with activity counts")
 class AdminUserDetailView(AdminBase, RetrieveAPIView):
+    required_permission = Perm.CUSTOMER_VIEW
     serializer_class = AdminUserDetailSerializer
 
     def get_queryset(self):
@@ -497,6 +729,7 @@ class AdminUserSuspendView(AdminBase, GenericAPIView):
     administrator, which keeps at least one admin able to sign in.
     """
 
+    required_permission = Perm.CUSTOMER_SUSPEND
     serializer_class = AdminUserSerializer
 
     def post(self, request, pk):
@@ -508,6 +741,15 @@ class AdminUserSuspendView(AdminBase, GenericAPIView):
         if user.is_active:
             user.is_active = False
             user.save(update_fields=["is_active"])
+            record_audit(
+                actor=request.user,
+                action=Perm.CUSTOMER_SUSPEND,
+                module="customer",
+                entity_type="User",
+                entity_id=user.pk,
+                changes={"is_active": [True, False]},
+                request=request,
+            )
         return Response(AdminUserSerializer(user).data, status=status.HTTP_200_OK)
 
 
@@ -518,6 +760,7 @@ class AdminUserSuspendView(AdminBase, GenericAPIView):
     responses=AdminUserSerializer,
 )
 class AdminUserReactivateView(AdminBase, GenericAPIView):
+    required_permission = Perm.CUSTOMER_RESTORE
     serializer_class = AdminUserSerializer
 
     def post(self, request, pk):
@@ -525,6 +768,15 @@ class AdminUserReactivateView(AdminBase, GenericAPIView):
         if not user.is_active:
             user.is_active = True
             user.save(update_fields=["is_active"])
+            record_audit(
+                actor=request.user,
+                action=Perm.CUSTOMER_RESTORE,
+                module="customer",
+                entity_type="User",
+                entity_id=user.pk,
+                changes={"is_active": [False, True]},
+                request=request,
+            )
         return Response(AdminUserSerializer(user).data, status=status.HTTP_200_OK)
 
 
@@ -533,6 +785,7 @@ class AdminUserReactivateView(AdminBase, GenericAPIView):
 
 @extend_schema(tags=ADMIN_TAG, summary="List all policies")
 class AdminPolicyListView(AdminBase, ListAPIView):
+    required_permission = Perm.POLICY_VIEW
     serializer_class = AdminPolicySerializer
     filterset_fields = ["status", "provider", "category", "is_featured"]
     search_fields = ["name", "provider__company_name"]
@@ -570,6 +823,8 @@ class AdminPolicyActionBase(AdminBase, GenericAPIView):
     responses=AdminPolicySerializer,
 )
 class AdminPolicyApproveView(AdminPolicyActionBase):
+    required_permission = Perm.POLICY_APPROVE
+
     def post(self, request, pk):
         policy = get_object_or_404(self.get_queryset(), pk=pk)
         try:
@@ -577,6 +832,15 @@ class AdminPolicyApproveView(AdminPolicyActionBase):
         except ValueError as error:
             raise PolicyNotActionable(str(error))
         notifications.notify_policy_approved(policy)
+        record_audit(
+            actor=request.user,
+            action=Perm.POLICY_APPROVE,
+            module="policy",
+            entity_type="Policy",
+            entity_id=policy.pk,
+            changes={"status": [None, policy.status]},
+            request=request,
+        )
         return self._serialized(policy)
 
 
@@ -587,6 +851,8 @@ class AdminPolicyApproveView(AdminPolicyActionBase):
     responses=AdminPolicySerializer,
 )
 class AdminPolicyRejectView(AdminPolicyActionBase):
+    required_permission = Perm.POLICY_REJECT
+
     def post(self, request, pk):
         policy = get_object_or_404(self.get_queryset(), pk=pk)
         try:
@@ -594,6 +860,15 @@ class AdminPolicyRejectView(AdminPolicyActionBase):
         except ValueError as error:
             raise PolicyNotActionable(str(error))
         notifications.notify_policy_rejected(policy)
+        record_audit(
+            actor=request.user,
+            action=Perm.POLICY_REJECT,
+            module="policy",
+            entity_type="Policy",
+            entity_id=policy.pk,
+            changes={"status": [None, policy.status]},
+            request=request,
+        )
         return self._serialized(policy)
 
 
@@ -604,6 +879,8 @@ class AdminPolicyRejectView(AdminPolicyActionBase):
     responses=AdminPolicySerializer,
 )
 class AdminPolicyDeactivateView(AdminPolicyActionBase):
+    required_permission = Perm.POLICY_SUSPEND
+
     def post(self, request, pk):
         policy = get_object_or_404(self.get_queryset(), pk=pk)
         try:
@@ -611,6 +888,15 @@ class AdminPolicyDeactivateView(AdminPolicyActionBase):
         except ValueError as error:
             raise PolicyNotActionable(str(error))
         notifications.notify_policy_deactivated(policy)
+        record_audit(
+            actor=request.user,
+            action=Perm.POLICY_SUSPEND,
+            module="policy",
+            entity_type="Policy",
+            entity_id=policy.pk,
+            changes={"status": [None, policy.status]},
+            request=request,
+        )
         return self._serialized(policy)
 
 
@@ -730,6 +1016,8 @@ class AdminPayoutReportView(CsvExportMixin, AdminPayoutListView):
 )
 class AdminAnalyticsView(AdminBase, GenericAPIView):
     """Platform-wide totals, breakdowns and a recent trend for the dashboard."""
+
+    required_permission = Perm.DASHBOARD_VIEW
 
     def get(self, request):
         return Response(build_admin_analytics())

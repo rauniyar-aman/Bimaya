@@ -33,7 +33,10 @@ from apps.notifications.models import Notification
 from apps.payments.models import Payment
 from apps.policies.models import InsuranceCategory, Policy
 from apps.providers.models import Provider, ProviderMembership, ProviderRole
+from apps.providers.rbac import OWNER
 from apps.purchases.models import PolicyPurchase
+from apps.staff.models import StaffRoleAssignment
+from apps.staff.rbac import StaffRole
 
 User = get_user_model()
 
@@ -57,9 +60,18 @@ def tearDownModule():
 
 
 def make_admin(email="admin@bimaya.test"):
-    return User.objects.create_user(
+    """A platform administrator holding the System Owner staff role.
+
+    Mirrors the deployed state: ``seed_staff_roles`` grants every existing
+    administrator ``SYSTEM_OWNER`` (which holds every granular permission), so
+    these end-to-end admin tests exercise the endpoints as a fully-empowered
+    staff member. Narrower-role access is covered in ``apps.staff`` tests.
+    """
+    user = User.objects.create_user(
         email=email, password="Himalaya#2026", role=User.Role.ADMIN, is_verified=True
     )
+    StaffRoleAssignment.objects.create(user=user, role=StaffRole.SYSTEM_OWNER.value)
+    return user
 
 
 def make_customer(email="cust@bimaya.test"):
@@ -239,11 +251,12 @@ class AdminProviderTests(APITestCase):
 @no_throttle
 @override_settings(MEDIA_ROOT=_MEDIA_ROOT)
 class AdminProviderMemberTests(APITestCase):
-    """Admin manages a provider organisation's team (staff and viewers).
+    """Admin manages a provider organisation's team.
 
     The owner (``Provider.user``) always appears in the list as role ``OWNER``
-    with a null membership id; staff/viewers are membership rows the admin can
-    add, re-role, and remove. Memberships are scoped to their provider.
+    with a null membership id; added members are membership rows the admin can
+    add, re-role, and remove, each holding one assignable role. Memberships are
+    scoped to their provider.
     """
 
     def setUp(self):
@@ -259,7 +272,7 @@ class AdminProviderMemberTests(APITestCase):
             "admin-provider-member-detail", args=[self.provider.id, membership_id]
         )
 
-    def _add(self, email, role=ProviderRole.STAFF.value):
+    def _add(self, email, role=ProviderRole.COMPANY_ADMIN.value):
         response = self.client.post(
             self._members_url(),
             {"email": email, "password": "Himalaya#2026", "role": role},
@@ -273,23 +286,23 @@ class AdminProviderMemberTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         owner = response.data[0]
-        self.assertEqual(owner["role"], ProviderRole.OWNER.value)
+        self.assertEqual(owner["role"], OWNER)
         self.assertIsNone(owner["membership_id"])
         self.assertEqual(owner["email"], self.provider.user.email)
 
-    def test_add_staff_creates_verified_provider_account(self):
+    def test_add_member_creates_verified_provider_account(self):
         response = self.client.post(
             self._members_url(),
             {
                 "email": "staff@bimaya.test",
                 "full_name": "Nabin Staff",
                 "password": "Himalaya#2026",
-                "role": ProviderRole.STAFF.value,
+                "role": ProviderRole.POLICY_MANAGER.value,
             },
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["role"], ProviderRole.STAFF.value)
+        self.assertEqual(response.data["role"], ProviderRole.POLICY_MANAGER.value)
         self.assertIsNotNone(response.data["membership_id"])
 
         user = User.objects.get(email="staff@bimaya.test")
@@ -298,7 +311,7 @@ class AdminProviderMemberTests(APITestCase):
         self.assertTrue(user.is_active)
         membership = ProviderMembership.objects.get(user=user)
         self.assertEqual(membership.provider, self.provider)
-        self.assertEqual(membership.role, ProviderRole.STAFF.value)
+        self.assertEqual(membership.role, ProviderRole.POLICY_MANAGER.value)
 
     def test_add_rejects_duplicate_email(self):
         response = self.client.post(
@@ -306,7 +319,7 @@ class AdminProviderMemberTests(APITestCase):
             {
                 "email": self.provider.user.email,
                 "password": "Himalaya#2026",
-                "role": ProviderRole.VIEWER.value,
+                "role": ProviderRole.FINANCE_VIEWER.value,
             },
             format="json",
         )
@@ -317,12 +330,13 @@ class AdminProviderMemberTests(APITestCase):
         )
 
     def test_add_rejects_owner_role(self):
+        # OWNER is an implicit sentinel, never an assignable membership role.
         response = self.client.post(
             self._members_url(),
             {
                 "email": "notowner@bimaya.test",
                 "password": "Himalaya#2026",
-                "role": ProviderRole.OWNER.value,
+                "role": OWNER,
             },
             format="json",
         )
@@ -330,26 +344,26 @@ class AdminProviderMemberTests(APITestCase):
         self.assertIn("role", response.data["errors"])
 
     def test_list_includes_owner_and_added_members(self):
-        self._add("staff@bimaya.test", ProviderRole.STAFF.value)
+        self._add("staff@bimaya.test", ProviderRole.COMPANY_ADMIN.value)
         response = self.client.get(self._members_url())
         self.assertEqual(len(response.data), 2)
         roles = {row["role"] for row in response.data}
-        self.assertEqual(roles, {ProviderRole.OWNER.value, ProviderRole.STAFF.value})
+        self.assertEqual(roles, {OWNER, ProviderRole.COMPANY_ADMIN.value})
 
-    def test_change_role_staff_to_viewer(self):
-        membership_id = self._add("staff@bimaya.test", ProviderRole.STAFF.value)
+    def test_change_role(self):
+        membership_id = self._add("staff@bimaya.test", ProviderRole.COMPANY_ADMIN.value)
         response = self.client.patch(
             self._detail_url(membership_id),
-            {"role": ProviderRole.VIEWER.value},
+            {"role": ProviderRole.FINANCE_VIEWER.value},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["role"], ProviderRole.VIEWER.value)
+        self.assertEqual(response.data["role"], ProviderRole.FINANCE_VIEWER.value)
         membership = ProviderMembership.objects.get(pk=membership_id)
-        self.assertEqual(membership.role, ProviderRole.VIEWER.value)
+        self.assertEqual(membership.role, ProviderRole.FINANCE_VIEWER.value)
 
     def test_remove_member_deletes_membership_and_deactivates_user(self):
-        membership_id = self._add("staff@bimaya.test", ProviderRole.STAFF.value)
+        membership_id = self._add("staff@bimaya.test", ProviderRole.COMPANY_ADMIN.value)
         user = ProviderMembership.objects.get(pk=membership_id).user
         response = self.client.delete(self._detail_url(membership_id))
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
@@ -362,11 +376,11 @@ class AdminProviderMemberTests(APITestCase):
         other_membership = ProviderMembership.objects.create(
             provider=other,
             user=make_customer("om@bimaya.test"),
-            role=ProviderRole.STAFF.value,
+            role=ProviderRole.COMPANY_ADMIN.value,
         )
         response = self.client.patch(
             self._detail_url(other_membership.id),
-            {"role": ProviderRole.VIEWER.value},
+            {"role": ProviderRole.FINANCE_VIEWER.value},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { api, errorMessage, fieldErrors } from "@/lib/api";
 import { rememberDevCode, useDevCode } from "@/lib/dev-otp";
 import { safeNext } from "@/lib/redirect";
+import { homeForRole } from "@/lib/user";
 
 const RESEND_COOLDOWN_SECONDS = 45;
 
@@ -19,7 +20,7 @@ export function VerifyOtpForm() {
   const params = useSearchParams();
   const { completeVerification } = useAuth();
 
-  const next = safeNext(params.get("next"));
+  const rawNext = params.get("next");
   const devCode = useDevCode();
   const [email, setEmail] = useState(params.get("email") ?? "");
   const [code, setCode] = useState("");
@@ -44,8 +45,11 @@ export function VerifyOtpForm() {
     setPending(true);
 
     try {
-      await completeVerification(email.trim().toLowerCase(), code.trim());
-      router.replace(next);
+      const user = await completeVerification(
+        email.trim().toLowerCase(),
+        code.trim(),
+      );
+      router.replace(rawNext ? safeNext(rawNext) : homeForRole(user.role));
     } catch (error) {
       setErrors(fieldErrors(error));
       setFormError(

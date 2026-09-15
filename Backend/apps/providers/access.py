@@ -1,18 +1,17 @@
 """Resolving a user's provider organisation and their role within it, plus the
-membership-aware permission shared by the provider APIs.
+granular permission gate shared by the provider APIs.
 
-The organisation owner is ``Provider.user``; extra staff and viewers are
+The organisation owner is ``Provider.user``; added staff are
 :class:`~apps.providers.models.ProviderMembership` rows. These helpers hide that
-split so callers can simply ask "which provider is this user, and what may they
-do here".
+split so callers can simply ask "which provider is this user, what role do they
+hold, and what may they do here". The role→permission policy is *code*
+(:mod:`apps.providers.rbac`); this module only resolves and enforces it.
 """
 
-from rest_framework.permissions import SAFE_METHODS, BasePermission
+from rest_framework.permissions import BasePermission
 
-from .models import Provider, ProviderMembership, ProviderRole
-
-# Roles allowed to perform write actions by default — everyone except viewers.
-WRITE_ROLES = (ProviderRole.OWNER, ProviderRole.STAFF)
+from .models import Provider, ProviderMembership
+from .rbac import OWNER, permissions_for
 
 
 def provider_for(user):
@@ -31,28 +30,50 @@ def provider_for(user):
 
 
 def role_for(user, provider):
-    """This user's role in ``provider`` as a string, or ``None``.
+    """This user's role in ``provider``, or ``None``.
 
-    Returns ``"OWNER"`` when the user owns the provider, otherwise the
-    membership role (``"STAFF"`` / ``"VIEWER"``), or ``None`` when the user is
-    not part of the organisation.
+    Returns the :data:`~apps.providers.rbac.OWNER` sentinel when the user owns
+    the provider, otherwise the membership role (one of the assignable
+    :class:`~apps.providers.rbac.ProviderRole` values), or ``None`` when the user
+    is not part of the organisation.
     """
     if not (user and user.is_authenticated) or provider is None:
         return None
     if provider.user_id == user.id:
-        return ProviderRole.OWNER.value
+        return OWNER
     membership = provider.memberships.filter(user=user).first()
     return membership.role if membership is not None else None
 
 
-class IsProviderTeamMember(BasePermission):
-    """Gate the provider APIs by organisation membership and role.
+def provider_permissions(user, provider=None):
+    """The set of provider permissions ``user`` holds in their organisation.
 
-    Any authenticated, verified provider user may read (safe methods). Writes
-    are limited to the roles in ``view.write_roles`` (default: owner + staff, so
-    viewers are read-only). A provider still completing onboarding — no profile
-    yet, hence no role — is let through on writes so the view can raise its own,
-    more specific "profile required" error; only an explicit viewer is blocked.
+    Owners and Company Admins hold everything; added members hold only what their
+    role grants. Empty for anyone outside the organisation. ``provider`` may be
+    passed to avoid re-resolving it.
+    """
+    if provider is None:
+        provider = provider_for(user)
+    role = role_for(user, provider)
+    if role is None:
+        return set()
+    return set(permissions_for([role]))
+
+
+class HasProviderPermission(BasePermission):
+    """Gate the provider APIs by organisation membership and granular role.
+
+    Mirrors :class:`apps.staff.permissions.HasStaffPermission` but
+    organisation-scoped: the caller must be an authenticated, verified provider
+    account that resolves to a provider organisation, and must hold the view's
+    ``required_permission`` within it. Owners hold every permission; added members
+    hold only what their role grants (:mod:`apps.providers.rbac`).
+
+    Views declare a static ``required_permission``; a method-dependent view sets
+    it in ``initial()`` before calling ``super().initial()`` (see
+    :class:`~apps.providers.views.ProviderProfileView`). A view may set
+    ``allow_onboarding = True`` to let a verified provider with no organisation
+    yet through, so it can run its own onboarding / create-or-404 flow.
     """
 
     message = "Your role does not allow this action."
@@ -63,10 +84,13 @@ class IsProviderTeamMember(BasePermission):
             user and user.is_authenticated and user.is_provider and user.is_verified
         ):
             return False
-        if request.method in SAFE_METHODS:
+        provider = provider_for(user)
+        if provider is None:
+            # Not yet onboarded (no profile, hence no role). Only endpoints that
+            # opt in — the profile upsert and analytics — let this through to
+            # raise their own, more specific "profile required" response.
+            return bool(getattr(view, "allow_onboarding", False))
+        required = getattr(view, "required_permission", None)
+        if required is None:
             return True
-        role = role_for(user, provider_for(user))
-        if role is None:
-            return True
-        allowed = getattr(view, "write_roles", WRITE_ROLES)
-        return role in allowed
+        return required in provider_permissions(user, provider)

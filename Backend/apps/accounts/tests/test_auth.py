@@ -405,6 +405,49 @@ class ProfileTests(APITestCase):
         self.assertEqual(self.user.email, "ram@example.com")
         self.assertEqual(self.user.role, User.Role.CUSTOMER)
 
+    def test_customer_has_empty_permissions_and_staff_roles(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.data["permissions"], [])
+        self.assertEqual(response.data["staff_roles"], [])
+
+    def test_permissions_and_staff_roles_are_read_only(self):
+        # These are derived, display-only fields — a client cannot grant itself
+        # capabilities by sending them on a profile update.
+        response = self.client.patch(
+            self.url,
+            {"permissions": ["kyc.approve"], "staff_roles": ["SYSTEM_OWNER"]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["permissions"], [])
+        self.assertEqual(response.data["staff_roles"], [])
+
+    def test_staff_member_exposes_assigned_permissions(self):
+        from apps.staff.models import StaffRoleAssignment
+        from apps.staff.rbac import Perm, StaffRole
+
+        admin = User.objects.create_user(
+            email="ops@example.com",
+            password=PASSWORD,
+            role=User.Role.ADMIN,
+            is_verified=True,
+        )
+        StaffRoleAssignment.objects.create(
+            user=admin, role=StaffRole.KYC_COMPLIANCE_OFFICER.value
+        )
+        self.client.force_authenticate(admin)
+
+        response = self.client.get(self.url)
+
+        self.assertIn(Perm.KYC_APPROVE, response.data["permissions"])
+        self.assertEqual(
+            response.data["staff_roles"], [StaffRole.KYC_COMPLIANCE_OFFICER.value]
+        )
+        # Least privilege: a compliance officer does not hold finance perms.
+        self.assertNotIn(Perm.COMMISSION_MANAGE, response.data["permissions"])
+
 
 # A throwaway media root so uploaded test images never touch the project's own.
 _AVATAR_MEDIA_ROOT = tempfile.mkdtemp(prefix="bimaya-avatar-tests-")

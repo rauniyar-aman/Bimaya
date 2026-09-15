@@ -18,12 +18,12 @@ from rest_framework.generics import (
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from apps.providers.access import IsProviderTeamMember, provider_for
+from apps.providers.access import HasProviderPermission, provider_for
+from apps.providers.rbac import ProviderPerm
 
 from .exceptions import (
     PolicyNotDeactivatable,
     PolicyNotSubmittable,
-    ProviderProfileRequired,
 )
 from .filters import PolicyFilter
 from .models import InsuranceCategory, Policy
@@ -132,12 +132,13 @@ class ProviderPolicyBase:
     """Shared helpers for the provider's own-policy endpoints.
 
     Resolves the acting user's provider organisation via
-    :func:`~apps.providers.access.provider_for`, so an owner and their staff /
-    viewers all work the same book of policies. Writes are gated by role in
-    :class:`~apps.providers.access.IsProviderTeamMember` (viewers are read-only).
+    :func:`~apps.providers.access.provider_for`, so an owner and their team all
+    work the same book of policies. Access is gated by
+    :class:`~apps.providers.access.HasProviderPermission`; each concrete view
+    declares the granular ``policy.*`` permission it needs.
     """
 
-    permission_classes = [IsProviderTeamMember]
+    permission_classes = [HasProviderPermission]
     serializer_class = ProviderPolicyWriteSerializer
 
     def get_provider(self):
@@ -156,15 +157,36 @@ class ProviderPolicyBase:
 class ProviderPolicyListCreateView(ProviderPolicyBase, ListCreateAPIView):
     filter_backends = []
 
+    def initial(self, request, *args, **kwargs):
+        # Listing needs policy.view; creating needs policy.create. Decide before
+        # the permission gate runs in super().initial().
+        self.required_permission = (
+            ProviderPerm.POLICY_CREATE
+            if request.method == "POST"
+            else ProviderPerm.POLICY_VIEW
+        )
+        return super().initial(request, *args, **kwargs)
+
     def perform_create(self, serializer):
-        provider = self.get_provider()
-        if provider is None:
-            raise ProviderProfileRequired()
-        serializer.save(provider=provider, status=Policy.Status.DRAFT)
+        # The permission gate already resolved the caller's organisation — this
+        # view does not set ``allow_onboarding``, so a provider with no profile
+        # is refused there and ``get_provider`` is never None here.
+        serializer.save(provider=self.get_provider(), status=Policy.Status.DRAFT)
 
 
 @extend_schema(tags=PROVIDER_TAG, summary="Retrieve, update or delete an own policy")
 class ProviderPolicyDetailView(ProviderPolicyBase, RetrieveUpdateDestroyAPIView):
+    def initial(self, request, *args, **kwargs):
+        # Reading needs policy.view; editing needs policy.edit; deleting needs
+        # policy.delete.
+        if request.method in ("PUT", "PATCH"):
+            self.required_permission = ProviderPerm.POLICY_EDIT
+        elif request.method == "DELETE":
+            self.required_permission = ProviderPerm.POLICY_DELETE
+        else:
+            self.required_permission = ProviderPerm.POLICY_VIEW
+        return super().initial(request, *args, **kwargs)
+
     def perform_update(self, serializer):
         was_approved = serializer.instance.status == Policy.Status.APPROVED
         policy = serializer.save()
@@ -181,6 +203,8 @@ class ProviderPolicyDetailView(ProviderPolicyBase, RetrieveUpdateDestroyAPIView)
     responses=ProviderPolicyWriteSerializer,
 )
 class ProviderPolicySubmitView(ProviderPolicyBase, GenericAPIView):
+    required_permission = ProviderPerm.POLICY_SUBMIT
+
     def post(self, request, pk):
         policy = get_object_or_404(self.get_queryset(), pk=pk)
         if policy.status not in (Policy.Status.DRAFT, Policy.Status.INACTIVE):
@@ -202,6 +226,8 @@ class ProviderPolicyDeactivateView(ProviderPolicyBase, GenericAPIView):
     Relisting reuses the existing submit endpoint (an inactive policy can be
     submitted for review again), so there is no separate relist action here.
     """
+
+    required_permission = ProviderPerm.POLICY_DEACTIVATE
 
     def post(self, request, pk):
         policy = get_object_or_404(self.get_queryset(), pk=pk)

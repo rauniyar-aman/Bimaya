@@ -1,8 +1,11 @@
-"""Serializers for customer KYC (personal details + identity document upload)."""
+"""Serializers for customer KYC (personal details + identity document upload)
+and provider KYC (a company's registration / tax / licensing documents)."""
+
+import os
 
 from rest_framework import serializers
 
-from .models import CustomerKyc
+from .models import CustomerKyc, ProviderKyc
 
 
 class CustomerKycSerializer(serializers.ModelSerializer):
@@ -75,3 +78,57 @@ class CustomerKycWriteSerializer(serializers.ModelSerializer):
                 {"document_back": "Both sides of the citizenship are required."}
             )
         return attrs
+
+
+class ProviderKycSerializer(serializers.ModelSerializer):
+    """Read shape for a provider KYC document.
+
+    The file itself is **not** exposed as a URL — it is confidential company
+    paperwork streamed only through the authenticated, scoped download endpoints
+    (provider-side and admin-side). ``file_name`` is the original filename, for
+    display; ``uploaded_by_email`` names the member who uploaded it.
+    """
+
+    document_type_display = serializers.CharField(
+        source="get_document_type_display", read_only=True
+    )
+    status_display = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
+    file_name = serializers.SerializerMethodField()
+    uploaded_by_email = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProviderKyc
+        fields = (
+            "id",
+            "document_type",
+            "document_type_display",
+            "file_name",
+            "status",
+            "status_display",
+            "review_note",
+            "uploaded_by_email",
+            "reviewed_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def get_file_name(self, obj) -> str:
+        return os.path.basename(obj.file.name) if obj.file else ""
+
+    def get_uploaded_by_email(self, obj) -> str | None:
+        return obj.uploaded_by.email if obj.uploaded_by_id else None
+
+
+class ProviderKycUploadSerializer(serializers.ModelSerializer):
+    """Create shape (multipart) for a provider KYC document.
+
+    ``provider``, ``status`` and ``uploaded_by`` are server-set in the view; the
+    uploader only chooses the document type and the file.
+    """
+
+    class Meta:
+        model = ProviderKyc
+        fields = ("id", "document_type", "file")

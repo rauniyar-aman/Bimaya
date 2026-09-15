@@ -17,17 +17,26 @@ import type { UserRole } from "@/lib/api";
 export function RequireAuth({
   children,
   roles,
+  permission,
 }: {
   children: React.ReactNode;
   /** Restrict the page to these roles; others are bounced to the dashboard. */
   roles?: UserRole[];
+  /**
+   * Also require this granular staff permission (e.g. "kyc.approve"). UX guard
+   * only — the API still authorises every request on its own.
+   */
+  permission?: string;
 }) {
   const { status, user, consumeSignOutIntent } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const allowed = !roles || (user ? roles.includes(user.role) : false);
+  const roleAllowed = !roles || (user ? roles.includes(user.role) : false);
+  const permissionAllowed =
+    !permission || (user ? user.permissions.includes(permission) : false);
+  const allowed = roleAllowed && permissionAllowed;
   // Tells "your session ran out while you were here" apart from "you were never
   // signed in", which need different messages on the login page.
   const wasSignedIn = useRef(false);

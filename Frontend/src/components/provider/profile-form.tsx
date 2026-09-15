@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
+import { useProviderPortal } from "@/components/provider/provider-portal";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,11 +86,13 @@ export function ProviderProfileForm() {
 
 function ProfileFields({ profile }: { profile: ProviderProfile | null }) {
   const { authFetch } = useAuth();
+  const { refresh } = useProviderPortal();
   const router = useRouter();
   const isCreate = profile === null;
-  // Only the organisation owner may edit the company profile; staff and viewers
-  // see it read-only (the backend enforces the same rule).
-  const canEdit = isCreate || profile.my_role === "OWNER";
+  // Editing the company profile needs the `company.edit` permission (Owner and
+  // Company Admin); everyone else sees it read-only. The backend enforces the
+  // same rule — this only controls what the UI offers.
+  const canEdit = isCreate || profile.my_permissions.includes("company.edit");
 
   const [companyName, setCompanyName] = useState(profile?.company_name ?? "");
   const [registrationNumber, setRegistrationNumber] = useState(
@@ -123,11 +126,15 @@ function ProfileFields({ profile }: { profile: ProviderProfile | null }) {
 
     try {
       await api.provider.saveProfile(authFetch, payload, isCreate ? "PUT" : "PATCH");
+      // Refresh the portal shell so the nav, dashboard and cached profile pick
+      // up the new details (and, on first setup, switch out of the setup state).
+      refresh();
       if (isCreate) {
         router.push("/provider");
         return;
       }
       setSaved(true);
+      setPending(false);
     } catch (error) {
       setErrors(fieldErrors(error));
       setFormError(
@@ -163,8 +170,8 @@ function ProfileFields({ profile }: { profile: ProviderProfile | null }) {
       <CardContent>
         {!canEdit && (
           <Alert variant="info" className="mb-5">
-            Only the organisation owner can edit the company profile. These
-            details are shown to you read-only.
+            You do not have permission to edit the company profile. These details
+            are shown to you read-only.
           </Alert>
         )}
         {saved && (

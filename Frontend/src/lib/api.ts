@@ -127,6 +127,15 @@ export interface AuthUser {
   role: UserRole;
   is_verified: boolean;
   date_joined: string;
+  /**
+   * Granular staff permissions (e.g. "kyc.approve"), derived server-side from
+   * the user's staff roles. Empty for customers and providers. Display-only —
+   * the backend authorises every request itself; never treat these as a
+   * security boundary.
+   */
+  permissions: string[];
+  /** The coded internal-staff roles held (e.g. "SYSTEM_OWNER"). Empty for non-staff. */
+  staff_roles: string[];
 }
 
 /** The uniform error envelope returned by the API. */
@@ -306,11 +315,26 @@ export interface ChatReply {
 
 /* Provider-facing shapes (own profile + own policies). */
 
-/** A member's role within a provider organisation. */
-export type ProviderRole = "OWNER" | "STAFF" | "VIEWER";
+/**
+ * A member's role within a provider organisation. `OWNER` is implicit
+ * (`Provider.user` — full control, never a stored membership row); the other
+ * five are assignable to added members, each scoped to what its job needs.
+ */
+export type ProviderRole =
+  | "OWNER"
+  | "COMPANY_ADMIN"
+  | "POLICY_MANAGER"
+  | "CLAIMS_OFFICER"
+  | "SALES_MANAGER"
+  | "FINANCE_VIEWER";
+
+/** The roles an Owner / Company Admin can assign to a member (everything but OWNER). */
+export type AssignableProviderRole = Exclude<ProviderRole, "OWNER">;
 
 export interface ProviderProfile {
   id: number;
+  /** Human-readable organisation identifier, e.g. `PRV-00142`. */
+  public_id: string;
   company_name: string;
   slug: string;
   registration_number: string;
@@ -325,6 +349,12 @@ export interface ProviderProfile {
   commission_rate: string;
   /** The signed-in user's role here — drives which write actions the UI shows. */
   my_role: ProviderRole | null;
+  /**
+   * The granular `module.action` permissions the signed-in user holds in this
+   * organisation. Drives which sections and actions the portal shows.
+   * Display-only — the backend authorises every request itself.
+   */
+  my_permissions: string[];
   created_at: string;
   updated_at: string;
 }
@@ -336,6 +366,70 @@ export interface ProviderProfileInput {
   website?: string;
   support_email?: string;
   support_phone?: string;
+}
+
+/* Provider self-service team + roles + KYC (the provider portal's own admin). */
+
+/** A member's role as `{value, label}` for display in the team table. */
+export interface ProviderRoleRef {
+  value: ProviderRole;
+  label: string;
+}
+
+/**
+ * One person in the signed-in user's own provider organisation, as returned by
+ * the self-service team endpoints. The owner appears as a synthetic row
+ * (`membership_id` null, role `OWNER`); everyone else is an added member.
+ * `permissions` is what their role grants, so the UI can show each member's reach.
+ */
+export interface ProviderTeamMember {
+  user_id: number;
+  /** Null for the owner (who is `Provider.user`, not a membership row). */
+  membership_id: number | null;
+  email: string;
+  full_name: string;
+  role: ProviderRoleRef;
+  is_active: boolean;
+  date_joined: string;
+  /** The `module.action` strings this member's role grants. Display-only. */
+  permissions: string[];
+}
+
+/** One assignable role in the role picker, with the permissions it grants. */
+export interface ProviderRoleInfo {
+  value: AssignableProviderRole;
+  label: string;
+  permissions: string[];
+  permission_count: number;
+}
+
+/** The assignable-roles → permissions matrix for the provider portal picker. */
+export interface ProviderRolesCatalog {
+  roles: ProviderRoleInfo[];
+  /** Every `module.action` string in the provider catalog, sorted. */
+  permissions: string[];
+}
+
+/** The kinds of company paperwork a provider uploads for verification. */
+export type ProviderKycDocType = "REGISTRATION" | "TAX" | "LICENSE" | "OTHER";
+
+/**
+ * A provider KYC document row. The file itself is confidential company paperwork
+ * streamed only through the authenticated download endpoints — never a raw media
+ * URL — so only `file_name` (for display) is exposed here.
+ */
+export interface ProviderKycDocument {
+  id: number;
+  document_type: ProviderKycDocType;
+  document_type_display: string;
+  file_name: string;
+  status: KycStatus;
+  status_display: string;
+  review_note: string;
+  uploaded_by_email: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 /** A provider's own policy — `category` is the write PK, `category_detail` the read shape. */
@@ -664,6 +758,8 @@ export interface PushKeyInfo {
 /** A provider row in the admin approvals table, with the owning account. */
 export interface AdminProvider {
   id: number;
+  /** Human-readable organisation identifier, e.g. `PRV-00142`. */
+  public_id: string;
   company_name: string;
   slug: string;
   registration_number: string;
@@ -770,7 +866,12 @@ export interface AdminProviderListParams {
   page?: number;
 }
 
-/** One person in a provider organisation: the owner or an added staff/viewer. */
+/**
+ * One person in a provider organisation, as returned to a platform admin: the
+ * owner (role `OWNER`) or an added member. `role` is the flat coded value — the
+ * admin table shows it directly rather than the permission-annotated shape the
+ * provider portal uses (`ProviderTeamMember`).
+ */
 export interface ProviderMember {
   user_id: number;
   /** Null for the owner (who is `Provider.user`, not a membership row). */
@@ -782,12 +883,12 @@ export interface ProviderMember {
   date_joined: string;
 }
 
-/** Admin input to add a staff/viewer to a provider organisation. */
+/** Input to add a member to a provider organisation (admin or provider self-service). */
 export interface ProviderMemberInput {
   email: string;
   full_name?: string;
   password: string;
-  role: "STAFF" | "VIEWER";
+  role: AssignableProviderRole;
 }
 
 export interface AdminKycListParams {
@@ -816,6 +917,94 @@ export interface AdminPolicyListParams {
   provider?: number;
   category?: number;
   is_featured?: boolean;
+  search?: string;
+  page?: number;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Staff, roles & audit shapes (internal-staff RBAC console)                  */
+/* -------------------------------------------------------------------------- */
+
+/** The 11 coded internal-staff job roles (mirrors `StaffRole` in the backend). */
+export type StaffRoleValue =
+  | "SYSTEM_OWNER"
+  | "OPERATIONS_MANAGER"
+  | "CUSTOMER_SUPPORT"
+  | "KYC_COMPLIANCE_OFFICER"
+  | "POLICY_MODERATOR"
+  | "PROVIDER_RELATIONS"
+  | "CLAIMS_OFFICER"
+  | "FINANCE_OFFICER"
+  | "TECHNICAL_ADMIN"
+  | "MARKETING_OFFICER"
+  | "LEGAL_ADVISOR";
+
+/** A coded staff role paired with its human label, as returned in staff rows. */
+export interface StaffRoleRef {
+  value: StaffRoleValue;
+  label: string;
+}
+
+/** An internal-staff account with its assigned roles and resolved permissions. */
+export interface StaffMember {
+  id: number;
+  email: string;
+  full_name: string;
+  is_active: boolean;
+  date_joined: string;
+  roles: StaffRoleRef[];
+  /** The union of `module.action` strings the assigned roles grant. */
+  permissions: string[];
+}
+
+/** Admin input to create a staff account with a temporary password. */
+export interface StaffCreateInput {
+  email: string;
+  full_name?: string;
+  password: string;
+  roles: StaffRoleValue[];
+}
+
+/** One role in the read-only roles/permission matrix. */
+export interface RoleInfo {
+  value: StaffRoleValue;
+  label: string;
+  permissions: string[];
+  permission_count: number;
+}
+
+/** The whole code-defined roles → permissions matrix. */
+export interface RolesCatalog {
+  roles: RoleInfo[];
+  /** Every `module.action` string in the catalog, sorted. */
+  permissions: string[];
+}
+
+/** A single append-only audit-trail record. */
+export interface AuditEntry {
+  id: number;
+  actor_email: string | null;
+  actor_role: string;
+  action: string;
+  module: string;
+  entity_type: string;
+  entity_id: string;
+  changes: Record<string, unknown>;
+  reason: string;
+  ip_address: string | null;
+  created_at: string;
+}
+
+export interface StaffListParams {
+  is_active?: boolean;
+  search?: string;
+  page?: number;
+}
+
+export interface AuditListParams {
+  action?: string;
+  module?: string;
+  actor?: number;
   search?: string;
   page?: number;
 }
@@ -1186,6 +1375,65 @@ export const api = {
         method: "POST",
         json: { body },
       }),
+
+    /* Team — self-service member management (owner / Company Admin). The owner
+       is surfaced as a synthetic row; `membershipId` targets an added member. */
+    listMembers: (authFetch: AuthFetch) =>
+      authFetch<ProviderTeamMember[]>("/provider/members/"),
+
+    getMember: (authFetch: AuthFetch, membershipId: number) =>
+      authFetch<ProviderTeamMember>(`/provider/members/${membershipId}/`),
+
+    createMember: (authFetch: AuthFetch, payload: ProviderMemberInput) =>
+      authFetch<ProviderTeamMember>("/provider/members/", {
+        method: "POST",
+        json: payload,
+      }),
+
+    setMemberRole: (
+      authFetch: AuthFetch,
+      membershipId: number,
+      role: AssignableProviderRole,
+    ) =>
+      authFetch<ProviderTeamMember>(`/provider/members/${membershipId}/role/`, {
+        method: "PATCH",
+        json: { role },
+      }),
+
+    disableMember: (authFetch: AuthFetch, membershipId: number) =>
+      authFetch<ProviderTeamMember>(
+        `/provider/members/${membershipId}/disable/`,
+        { method: "POST" },
+      ),
+
+    enableMember: (authFetch: AuthFetch, membershipId: number) =>
+      authFetch<ProviderTeamMember>(
+        `/provider/members/${membershipId}/enable/`,
+        { method: "POST" },
+      ),
+
+    /** The assignable-roles → permissions matrix, for the role picker. */
+    listRoles: (authFetch: AuthFetch) =>
+      authFetch<ProviderRolesCatalog>("/provider/roles/"),
+
+    /* KYC documents — the company's own registration/tax/licence paperwork. */
+    listKyc: (authFetch: AuthFetch) =>
+      authFetch<ProviderKycDocument[]>("/provider/kyc-documents/"),
+
+    /** Upload a KYC document (multipart: `document_type` + `file`). */
+    uploadKyc: (authFetch: AuthFetch, form: FormData) =>
+      authFetch<ProviderKycDocument>("/provider/kyc-documents/", {
+        method: "POST",
+        form,
+      }),
+
+    /** Remove one of your own KYC documents while it is still pending review. */
+    deleteKyc: (authFetch: AuthFetch, id: number) =>
+      authFetch<void>(`/provider/kyc-documents/${id}/`, { method: "DELETE" }),
+
+    /** Download a KYC document file via the authenticated, org-scoped route. */
+    downloadKyc: (authFetch: AuthFetch, id: number) =>
+      authFetch<Blob>(`/provider/kyc-documents/${id}/download/`, { blob: true }),
   },
 
   /** Customer KYC — the reusable self record and per-beneficiary records. */
@@ -1363,7 +1611,7 @@ export const api = {
       authFetch: AuthFetch,
       providerId: number,
       membershipId: number,
-      role: "STAFF" | "VIEWER",
+      role: AssignableProviderRole,
     ) =>
       authFetch<ProviderMember>(
         `/admin/providers/${providerId}/members/${membershipId}/`,
@@ -1378,6 +1626,42 @@ export const api = {
       authFetch<void>(`/admin/providers/${providerId}/members/${membershipId}/`, {
         method: "DELETE",
       }),
+
+    /* Provider KYC documents — review a company's registration/tax/licence docs */
+    listProviderKyc: (authFetch: AuthFetch, providerId: number) =>
+      authFetch<ProviderKycDocument[]>(`/admin/providers/${providerId}/kyc/`),
+
+    /** Download a provider KYC document file via the authenticated admin route. */
+    providerKycDocument: (
+      authFetch: AuthFetch,
+      providerId: number,
+      documentId: number,
+    ) =>
+      authFetch<Blob>(
+        `/admin/providers/${providerId}/kyc/${documentId}/document/`,
+        { blob: true },
+      ),
+
+    verifyProviderKyc: (
+      authFetch: AuthFetch,
+      providerId: number,
+      documentId: number,
+    ) =>
+      authFetch<ProviderKycDocument>(
+        `/admin/providers/${providerId}/kyc/${documentId}/verify/`,
+        { method: "POST" },
+      ),
+
+    rejectProviderKyc: (
+      authFetch: AuthFetch,
+      providerId: number,
+      documentId: number,
+      note: string,
+    ) =>
+      authFetch<ProviderKycDocument>(
+        `/admin/providers/${providerId}/kyc/${documentId}/reject/`,
+        { method: "POST", json: { note } },
+      ),
 
     /* KYC */
     listKyc: (authFetch: AuthFetch, params: AdminKycListParams = {}) =>
@@ -1488,5 +1772,43 @@ export const api = {
     /* Analytics */
     analytics: (authFetch: AuthFetch) =>
       authFetch<AdminAnalytics>("/admin/analytics/"),
+
+    /* Internal staff — accounts, their coded roles, enable/disable */
+    listStaff: (authFetch: AuthFetch, params: StaffListParams = {}) =>
+      authFetch<Paginated<StaffMember>>(
+        `/admin/staff/${toQuery(params as Record<string, unknown>)}`,
+      ),
+
+    getStaff: (authFetch: AuthFetch, id: number) =>
+      authFetch<StaffMember>(`/admin/staff/${id}/`),
+
+    createStaff: (authFetch: AuthFetch, payload: StaffCreateInput) =>
+      authFetch<StaffMember>("/admin/staff/", { method: "POST", json: payload }),
+
+    /** Replace a staff account's set of coded roles. */
+    setStaffRoles: (authFetch: AuthFetch, id: number, roles: StaffRoleValue[]) =>
+      authFetch<StaffMember>(`/admin/staff/${id}/roles/`, {
+        method: "PATCH",
+        json: { roles },
+      }),
+
+    /** Disable a staff account so it can no longer sign in. */
+    disableStaff: (authFetch: AuthFetch, id: number) =>
+      authFetch<StaffMember>(`/admin/staff/${id}/disable/`, { method: "POST" }),
+
+    /** Re-enable a disabled staff account. */
+    enableStaff: (authFetch: AuthFetch, id: number) =>
+      authFetch<StaffMember>(`/admin/staff/${id}/enable/`, { method: "POST" }),
+
+    /* Roles & audit (read-only) */
+    /** The code-defined roles → permissions matrix. */
+    listRoles: (authFetch: AuthFetch) =>
+      authFetch<RolesCatalog>("/admin/roles/"),
+
+    /** The append-only staff audit trail, paginated and filterable. */
+    listAudit: (authFetch: AuthFetch, params: AuditListParams = {}) =>
+      authFetch<Paginated<AuditEntry>>(
+        `/admin/audit/${toQuery(params as Record<string, unknown>)}`,
+      ),
   },
 };

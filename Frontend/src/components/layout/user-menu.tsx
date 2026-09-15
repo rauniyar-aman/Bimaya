@@ -4,28 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
+import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/cn";
-import { ROLE_LABELS, displayName, initials } from "@/lib/user";
-
-import type { AuthUser } from "@/lib/api";
-
-function menuLinksFor(user: AuthUser) {
-  const links = [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/dashboard/policies", label: "My policies" },
-    { href: "/dashboard/claims", label: "My claims" },
-    { href: "/dashboard/notifications", label: "Notifications" },
-    { href: "/dashboard/kyc", label: "KYC verification" },
-    { href: "/dashboard/profile", label: "Profile settings" },
-  ];
-  if (user.role === "PROVIDER") {
-    links.splice(1, 0, { href: "/provider", label: "Provider area" });
-  }
-  if (user.role === "ADMIN") {
-    links.splice(1, 0, { href: "/admin", label: "Admin panel" });
-  }
-  return links;
-}
+import { ROLE_LABELS, accountMenuLinks, displayName, initials } from "@/lib/user";
 
 /** Avatar button with the signed-in user's account menu. */
 export function UserMenu() {
@@ -56,7 +37,7 @@ export function UserMenu() {
 
   if (!user) return null;
 
-  const menuLinks = menuLinksFor(user);
+  const menuLinks = accountMenuLinks(user);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -78,9 +59,12 @@ export function UserMenu() {
           open && "bg-surface",
         )}
       >
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white">
-          {initials(user)}
-        </span>
+        <Avatar
+          src={user.avatar}
+          fallback={initials(user)}
+          alt={displayName(user)}
+          size="sm"
+        />
         <span className="max-w-28 truncate text-sm font-medium text-ink">
           {displayName(user)}
         </span>
@@ -103,7 +87,7 @@ export function UserMenu() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-xl border border-line bg-white shadow-lg"
+          className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-xl border border-line bg-card shadow-lg"
         >
           <div className="border-b border-line px-4 py-3">
             <p className="truncate text-sm font-medium text-ink">
@@ -135,7 +119,7 @@ export function UserMenu() {
               role="menuitem"
               onClick={handleSignOut}
               disabled={signingOut}
-              className="w-full rounded-lg px-2.5 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
+              className="w-full rounded-lg px-2.5 py-2 text-left text-sm text-danger transition-colors hover:bg-danger-surface disabled:opacity-60"
             >
               {signingOut ? "Signing out…" : "Sign out"}
             </button>

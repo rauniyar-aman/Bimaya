@@ -138,15 +138,17 @@ class ProviderPolicyCrudTests(APITestCase):
         response = self.client.get(reverse("provider-policy-detail", args=[policy.id]))
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_create_without_profile_returns_clear_error(self):
+    def test_create_without_profile_is_denied_at_the_gate(self):
+        # A verified provider account with no organisation resolves to no role,
+        # so the permission gate refuses every org-scoped endpoint (403), the
+        # same as any other provider surface — they must be onboarded first.
         user = User.objects.create_user(
             email="noprofile@bimaya.test", password="Himalaya#2026",
             role=User.Role.PROVIDER, is_verified=True,
         )
         self.client.force_authenticate(user)
         response = self.client.post(self.list_url, self._valid_payload(), format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["code"], "provider_profile_required")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_customer_cannot_create_policy(self):
         customer = User.objects.create_user(

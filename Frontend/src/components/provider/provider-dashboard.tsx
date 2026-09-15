@@ -3,27 +3,20 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
+import { useProviderPortal } from "@/components/provider/provider-portal";
 import { ClaimReviewQueue } from "@/components/provider/claim-review-queue";
 import { IssuanceQueue } from "@/components/provider/issuance-queue";
 import { PolicyRow } from "@/components/provider/policy-row";
 import { ProviderAnalyticsSection } from "@/components/provider/provider-analytics";
 import { ProviderPayouts } from "@/components/provider/provider-payouts";
 import { ProviderSales } from "@/components/provider/provider-sales";
-import { Container } from "@/components/layout/container";
 import { Alert } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusPill } from "@/components/ui/status-pill";
 import { BuildingIcon, PlusIcon } from "@/components/icons";
-import {
-  api,
-  errorCode,
-  type KycStatus,
-  type ProviderPolicy,
-  type ProviderProfile,
-  type ProviderRole,
-} from "@/lib/api";
+import { api, type KycStatus, type ProviderPolicy, type ProviderProfile } from "@/lib/api";
 
 const KYC_LABEL: Record<
   KycStatus,
@@ -34,62 +27,53 @@ const KYC_LABEL: Record<
   REJECTED: { variant: "failed", label: "KYC rejected" },
 };
 
-type State =
-  | { phase: "loading" }
-  | { phase: "error" }
-  | { phase: "ready"; profile: ProviderProfile | null; policies: ProviderPolicy[] };
-
+/**
+ * The provider portal home. The organisation profile and the caller's org
+ * permissions come from {@link useProviderPortal}; every section below is gated
+ * by the granular permission its API needs, so a Claims Officer never sees the
+ * policy list and a Finance Viewer sees payouts read-only. This is display only —
+ * the backend authorises every request itself.
+ */
 export function ProviderDashboard() {
   const { authFetch } = useAuth();
-  const [state, setState] = useState<State>({ phase: "loading" });
+  const { profile, permissions } = useProviderPortal();
+  const has = (permission: string) => permissions.includes(permission);
+  const canViewPolicies = has("policy.view");
+
+  // Policies are the only dashboard data the portal shell doesn't already hold.
+  // `null` = still loading; the policies section only renders when both `profile`
+  // and `canViewPolicies` hold, so the fetch below runs exactly when it is shown
+  // (roles that can't read policies would 403 anyway).
+  const [policies, setPolicies] = useState<ProviderPolicy[] | null>(null);
 
   useEffect(() => {
+    if (!profile || !canViewPolicies) return;
     let cancelled = false;
-    Promise.all([
-      api.provider
-        .getProfile(authFetch)
-        .then((profile): ProviderProfile | null => profile)
-        .catch((error) => {
-          if (errorCode(error) === "provider_profile_missing") return null;
-          throw error;
-        }),
-      api.provider
-        .listPolicies(authFetch)
-        .then((page) => page.results)
-        .catch(() => [] as ProviderPolicy[]),
-    ])
-      .then(([profile, policies]) => {
-        if (!cancelled) setState({ phase: "ready", profile, policies });
+    api.provider
+      .listPolicies(authFetch)
+      .then((page) => {
+        if (!cancelled) setPolicies(page.results);
       })
       .catch(() => {
-        if (!cancelled) setState({ phase: "error" });
+        if (!cancelled) setPolicies([]);
       });
     return () => {
       cancelled = true;
     };
-  }, [authFetch]);
+  }, [authFetch, profile, canViewPolicies]);
 
   function handleSubmitted(updated: ProviderPolicy) {
-    setState((s) =>
-      s.phase === "ready"
-        ? {
-            ...s,
-            policies: s.policies.map((p) => (p.id === updated.id ? updated : p)),
-          }
-        : s,
+    setPolicies((prev) =>
+      prev ? prev.map((p) => (p.id === updated.id ? updated : p)) : prev,
     );
   }
 
   function handleDeleted(id: number) {
-    setState((s) =>
-      s.phase === "ready"
-        ? { ...s, policies: s.policies.filter((p) => p.id !== id) }
-        : s,
-    );
+    setPolicies((prev) => (prev ? prev.filter((p) => p.id !== id) : prev));
   }
 
   return (
-    <Container className="flex-1 py-10 lg:py-14">
+    <div>
       <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
         Provider area
       </h1>
@@ -97,65 +81,40 @@ export function ProviderDashboard() {
         Manage your company profile and the plans you list on Bimaya.
       </p>
 
-      {state.phase === "loading" && (
-        <div className="flex items-center justify-center py-20">
-          <Spinner className="h-6 w-6 text-brand-500" />
-        </div>
-      )}
+      <div className="mt-8 space-y-8">
+        <ProfileSection profile={profile} canEdit={has("company.edit")} />
 
-      {state.phase === "error" && (
-        <Alert variant="error" className="mt-8">
-          We could not load your provider area. Please refresh and try again.
-        </Alert>
-      )}
+        {profile && canViewPolicies && (
+          <PoliciesSection
+            approved={profile.is_approved}
+            policies={policies}
+            canWrite={has("policy.edit")}
+            onSubmitted={handleSubmitted}
+            onDeleted={handleDeleted}
+          />
+        )}
 
-      {state.phase === "ready" && (() => {
-        // Viewers get a read-only dashboard; owners and staff can act. A fresh
-        // owner with no profile yet has no role, but is treated as a writer so
-        // they can create one.
-        const canWrite = state.profile?.my_role !== "VIEWER";
-        return (
-        <div className="mt-8 space-y-8">
-          <ViewerNotice role={state.profile?.my_role ?? null} />
-          <ProfileSection profile={state.profile} />
-
-          {state.profile && (
-            <PoliciesSection
-              approved={state.profile.is_approved}
-              policies={state.policies}
-              canWrite={canWrite}
-              onSubmitted={handleSubmitted}
-              onDeleted={handleDeleted}
-            />
-          )}
-
-          {state.profile?.is_approved && (
-            <>
-              <ProviderAnalyticsSection />
-              <IssuanceQueue canWrite={canWrite} />
-              <ClaimReviewQueue canWrite={canWrite} />
-              <ProviderSales />
-              <ProviderPayouts />
-            </>
-          )}
-        </div>
-        );
-      })()}
-    </Container>
+        {profile?.is_approved && (
+          <>
+            {has("analytics.view") && <ProviderAnalyticsSection />}
+            {has("issuance.view") && <IssuanceQueue canWrite={has("issuance.issue")} />}
+            {has("claim.view") && <ClaimReviewQueue canWrite={has("claim.review")} />}
+            {has("purchase.view") && <ProviderSales />}
+            {has("payout.view") && <ProviderPayouts />}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
-function ViewerNotice({ role }: { role: ProviderRole | null }) {
-  if (role !== "VIEWER") return null;
-  return (
-    <Alert variant="info">
-      You have view-only access to this organisation. You can review policies,
-      sales, and claims, but only owners and staff can make changes.
-    </Alert>
-  );
-}
-
-function ProfileSection({ profile }: { profile: ProviderProfile | null }) {
+function ProfileSection({
+  profile,
+  canEdit,
+}: {
+  profile: ProviderProfile | null;
+  canEdit: boolean;
+}) {
   if (!profile) {
     return (
       <Card>
@@ -191,13 +150,25 @@ function ProfileSection({ profile }: { profile: ProviderProfile | null }) {
     <Card>
       <CardContent className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-            <BuildingIcon className="h-5 w-5" />
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-brand-50 text-brand-600">
+            {profile.logo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={profile.logo}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <BuildingIcon className="h-5 w-5" />
+            )}
           </span>
           <div>
             <h2 className="font-display text-lg font-semibold text-ink">
               {profile.company_name}
             </h2>
+            <p className="mt-0.5 text-xs font-medium tabular-nums text-muted">
+              {profile.public_id}
+            </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <StatusPill status={profile.is_approved ? "active" : "pending"}>
                 {profile.is_approved ? "Approved to sell" : "Awaiting approval"}
@@ -217,7 +188,7 @@ function ProfileSection({ profile }: { profile: ProviderProfile | null }) {
           href="/provider/profile"
           className={buttonVariants({ variant: "secondary", size: "md" })}
         >
-          Edit profile
+          {canEdit ? "Edit profile" : "View profile"}
         </Link>
       </CardContent>
     </Card>
@@ -232,7 +203,7 @@ function PoliciesSection({
   onDeleted,
 }: {
   approved: boolean;
-  policies: ProviderPolicy[];
+  policies: ProviderPolicy[] | null;
   canWrite: boolean;
   onSubmitted: (updated: ProviderPolicy) => void;
   onDeleted: (id: number) => void;
@@ -261,7 +232,11 @@ function PoliciesSection({
         </Alert>
       )}
 
-      {policies.length === 0 ? (
+      {policies === null ? (
+        <div className="flex items-center justify-center py-16">
+          <Spinner className="h-6 w-6 text-brand-500" />
+        </div>
+      ) : policies.length === 0 ? (
         <div className="mt-4 rounded-2xl border border-dashed border-line bg-surface/50 p-10 text-center">
           <h3 className="font-display text-lg font-semibold text-ink">
             No policies yet
