@@ -68,7 +68,7 @@ export function PolicyFilters({
         e.preventDefault();
         apply({});
       }}
-      className="rounded-2xl border border-line bg-white p-4 shadow-sm"
+      className="rounded-2xl border border-line bg-card p-4 shadow-sm"
       role="search"
       aria-label="Filter policies"
     >

@@ -145,7 +145,7 @@ function CheckoutInner({ slug }: { slug: string }) {
                   </div>
                 </dl>
 
-                <div className="flex items-start gap-2 rounded-xl border border-line bg-white p-4 text-sm text-muted">
+                <div className="flex items-start gap-2 rounded-xl border border-line bg-card p-4 text-sm text-muted">
                   <ShieldCheckIcon className="mt-0.5 h-5 w-5 shrink-0 text-success-500" />
                   <p>
                     Your details are protected. You will confirm nominee and KYC

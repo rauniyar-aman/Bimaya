@@ -45,7 +45,7 @@ export function ExportButton({ onExport, filename, label = "Export CSV" }: Expor
       {error && (
         <p
           role="alert"
-          className="absolute right-0 top-full z-10 mt-1 whitespace-nowrap text-xs text-red-600"
+          className="absolute right-0 top-full z-10 mt-1 whitespace-nowrap text-xs text-danger"
         >
           {error}
         </p>

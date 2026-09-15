@@ -86,7 +86,7 @@ export function ChatWidget() {
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end sm:bottom-8 sm:right-8">
       {open && (
-        <div className="mb-3 flex h-[30rem] w-[calc(100vw-2rem)] max-w-sm flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-xl">
+        <div className="mb-3 flex h-[30rem] w-[calc(100vw-2rem)] max-w-sm flex-col overflow-hidden rounded-2xl border border-line bg-card shadow-xl">
           <header className="flex items-center justify-between gap-2 border-b border-line bg-brand-500 px-4 py-3 text-white">
             <div>
               <p className="font-display text-sm font-semibold">Bimaya advisor</p>

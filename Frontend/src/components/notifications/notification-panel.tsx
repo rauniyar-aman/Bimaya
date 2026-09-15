@@ -92,7 +92,7 @@ export function NotificationPanel({
   return (
     <div
       role="menu"
-      className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-line bg-white shadow-lg sm:w-96"
+      className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-line bg-card shadow-lg sm:w-96"
     >
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <p className="text-sm font-semibold text-ink">Notifications</p>

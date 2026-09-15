@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PolicyEditor } from "@/components/provider/policy-editor";
-import { Container } from "@/components/layout/container";
 
 type Params = Promise<{ id: string }>;
 
@@ -15,7 +14,7 @@ export default async function EditPolicyPage({ params }: { params: Params }) {
   const { id } = await params;
 
   return (
-    <Container className="flex-1 py-10 lg:py-14">
+    <>
       <nav aria-label="Breadcrumb" className="text-sm text-muted">
         <Link
           href="/provider"
@@ -30,6 +29,6 @@ export default async function EditPolicyPage({ params }: { params: Params }) {
       <div className="mt-6 max-w-2xl">
         <PolicyEditor policyId={Number(id)} />
       </div>
-    </Container>
+    </>
   );
 }

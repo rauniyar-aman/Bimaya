@@ -59,7 +59,7 @@ export default async function CategoryDetailPage({
     <>
       <Navbar />
       <main className="flex-1">
-        <section className="border-b border-line bg-gradient-to-b from-brand-50/60 to-white">
+        <section className="border-b border-line bg-gradient-to-b from-brand-50/60 to-white dark:from-brand-500/10 dark:to-transparent">
           <Container className="py-10 lg:py-14">
             <nav className="text-sm text-muted" aria-label="Breadcrumb">
               <Link href="/categories" className="hover:text-brand-600">

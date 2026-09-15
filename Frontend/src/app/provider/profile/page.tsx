@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ProviderProfileForm } from "@/components/provider/profile-form";
-import { Container } from "@/components/layout/container";
 
 export const metadata: Metadata = {
   title: "Company profile",
@@ -11,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function ProviderProfilePage() {
   return (
-    <Container className="flex-1 py-10 lg:py-14">
+    <>
       <nav aria-label="Breadcrumb" className="text-sm text-muted">
         <Link
           href="/provider"
@@ -26,6 +25,6 @@ export default function ProviderProfilePage() {
       <div className="mt-6 max-w-2xl">
         <ProviderProfileForm />
       </div>
-    </Container>
+    </>
   );
 }

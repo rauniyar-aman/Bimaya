@@ -130,7 +130,7 @@ function IssuanceRow({
   }
 
   return (
-    <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
+    <div className="rounded-xl border border-line bg-card p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -200,7 +200,7 @@ function IssuanceRow({
         </form>
       )}
 
-      {formError && <p className="mt-2 text-sm text-red-600">{formError}</p>}
+      {formError && <p className="mt-2 text-sm text-danger">{formError}</p>}
     </div>
   );
 }

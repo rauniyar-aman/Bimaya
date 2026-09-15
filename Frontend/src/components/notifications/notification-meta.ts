@@ -52,7 +52,7 @@ export const DEFAULT_NOTIFICATION_META: NotificationMeta = {
 export const NOTIFICATION_TONE_CLASSES: Record<NotificationTone, string> = {
   brand: "bg-brand-50 text-brand-600",
   success: "bg-success-50 text-success-700",
-  danger: "bg-red-50 text-red-600",
+  danger: "bg-danger-surface text-danger",
   accent: "bg-accent-50 text-accent-700",
   muted: "bg-surface text-muted",
 };

@@ -28,13 +28,13 @@ export function BackendStatus({ className }: { className?: string }) {
   }, []);
 
   const view = {
-    checking: { dot: "bg-slate-300", text: "text-muted", label: "Checking API…" },
+    checking: { dot: "bg-muted", text: "text-muted", label: "Checking API…" },
     online: {
       dot: "bg-success-500",
       text: "text-success-700",
       label: version ? `API connected · v${version}` : "API connected",
     },
-    offline: { dot: "bg-slate-400", text: "text-muted", label: "API offline" },
+    offline: { dot: "bg-muted", text: "text-muted", label: "API offline" },
   }[state];
 
   return (

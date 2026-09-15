@@ -4,7 +4,7 @@ import { cn } from "@/lib/cn";
 export type AlertVariant = "error" | "success" | "info";
 
 const variantClasses: Record<AlertVariant, string> = {
-  error: "border-red-200 bg-red-50 text-red-800",
+  error: "border-danger-border bg-danger-surface text-danger-foreground",
   success: "border-success-200 bg-success-50 text-success-800",
   info: "border-brand-100 bg-brand-50 text-brand-800",
 };

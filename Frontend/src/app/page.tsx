@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RedirectSignedInHome } from "@/components/auth/redirect-signed-in-home";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Container } from "@/components/layout/container";
@@ -98,20 +99,21 @@ const FEATURES: { title: string; description: string; Icon: IconType }[] = [
 export default function Home() {
   return (
     <>
+      <RedirectSignedInHome />
       <Navbar />
 
       <main className="flex-1">
         {/* Hero */}
         <section className="relative overflow-hidden">
           <div className="pointer-events-none absolute inset-0 -z-10">
-            <div className="absolute inset-0 bg-gradient-to-b from-brand-50/70 to-white" />
+            <div className="absolute inset-0 bg-gradient-to-b from-brand-50/70 to-white dark:from-brand-500/10 dark:to-transparent" />
             <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-brand-100/50 blur-3xl" />
             <div className="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-accent-100/40 blur-3xl" />
           </div>
 
           <Container className="grid items-center gap-12 py-16 lg:grid-cols-2 lg:py-24">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-white px-3 py-1 text-xs font-medium text-brand-700 shadow-sm">
+              <span className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-card px-3 py-1 text-xs font-medium text-brand-700 shadow-sm dark:border-brand-800 dark:text-brand-200">
                 <ShieldCheckIcon className="h-3.5 w-3.5" />
                 Nepal&apos;s digital insurance marketplace
               </span>
@@ -214,7 +216,7 @@ export default function Home() {
                 <Link
                   key={slug}
                   href={`/categories/${slug}`}
-                  className="group flex flex-col rounded-2xl border border-line bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-brand-200 hover:shadow-md"
+                  className="group flex flex-col rounded-2xl border border-line bg-card p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-brand-200 hover:shadow-md"
                 >
                   <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                     <Icon className="h-6 w-6" />

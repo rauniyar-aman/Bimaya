@@ -56,7 +56,7 @@ export function Modal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
       <div
         ref={dialogRef}
         role="dialog"
@@ -64,7 +64,7 @@ export function Modal({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          "relative z-10 w-full max-w-lg rounded-2xl border border-line bg-white shadow-xl focus:outline-none",
+          "relative z-10 w-full max-w-lg rounded-2xl border border-line bg-card shadow-xl focus:outline-none",
           className,
         )}
       >

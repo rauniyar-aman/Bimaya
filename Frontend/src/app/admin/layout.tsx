@@ -31,8 +31,12 @@ export default function AdminLayout({
                 Onboard providers, verify customers, and keep the marketplace moving.
               </p>
             </header>
-            <AdminNav />
-            <div className="mt-8">{children}</div>
+            <div className="lg:flex lg:gap-8">
+              <aside className="lg:sticky lg:top-20 lg:w-56 lg:shrink-0 lg:self-start">
+                <AdminNav />
+              </aside>
+              <div className="mt-6 min-w-0 flex-1 lg:mt-0">{children}</div>
+            </div>
           </Container>
         </RequireAuth>
       </Suspense>

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Sora } from "next/font/google";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { ChatWidget } from "@/components/assistant/chat-widget";
+import { ThemeProvider } from "@/components/theme/theme-provider";
 import "./globals.css";
 
 const inter = Inter({
@@ -18,6 +19,11 @@ const sora = Sora({
 });
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+// Runs before first paint to set the theme class, so there is no flash of the
+// wrong theme before React hydrates. Mirrors the logic in ThemeProvider and
+// reads the same localStorage key.
+const THEME_SCRIPT = `(function(){try{var k="bimaya-theme",s=localStorage.getItem(k),d=s==="dark"||((s==="system"||!s)&&window.matchMedia("(prefers-color-scheme: dark)").matches),e=document.documentElement;e.classList.toggle("dark",d);e.style.colorScheme=d?"dark":"light";}catch(e){}})();`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -48,20 +54,27 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1626" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${inter.variable} ${sora.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
-        <AuthProvider>
-          {children}
-          <ChatWidget />
-        </AuthProvider>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <ThemeProvider>
+          <AuthProvider>
+            {children}
+            <ChatWidget />
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

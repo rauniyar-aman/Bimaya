@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
  * has to be kept out of the base rather than overridden per caller.)
  */
 export const inputBase =
-  "h-11 w-full rounded-lg border border-line bg-white text-sm text-ink transition-colors placeholder:text-muted/70 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60";
+  "h-11 w-full rounded-lg border border-line bg-card text-sm text-ink transition-colors placeholder:text-muted/70 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60";
 
 export function Input({
   className,

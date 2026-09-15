@@ -23,12 +23,12 @@ const styles: Record<StatusVariant, { wrap: string; dot: string }> = {
     dot: "bg-accent-500",
   },
   failed: {
-    wrap: "border-red-200 bg-red-50 text-red-600",
-    dot: "bg-red-500",
+    wrap: "border-danger-border bg-danger-surface text-danger",
+    dot: "bg-danger",
   },
   expired: {
-    wrap: "border-slate-200 bg-slate-100 text-slate-600",
-    dot: "bg-slate-400",
+    wrap: "border-line bg-surface text-muted",
+    dot: "bg-muted",
   },
   info: {
     wrap: "border-brand-200 bg-brand-50 text-brand-700",

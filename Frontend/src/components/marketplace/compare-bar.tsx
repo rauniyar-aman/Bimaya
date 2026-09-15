@@ -24,7 +24,7 @@ export function CompareBar() {
 
   return (
     <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
-      <div className="flex items-center gap-3 rounded-full border border-line bg-white/95 px-4 py-2.5 shadow-lg backdrop-blur">
+      <div className="flex items-center gap-3 rounded-full border border-line bg-card/95 px-4 py-2.5 shadow-lg backdrop-blur">
         <span className="text-sm font-medium text-ink">
           {count} {count === 1 ? "plan" : "plans"} selected
         </span>

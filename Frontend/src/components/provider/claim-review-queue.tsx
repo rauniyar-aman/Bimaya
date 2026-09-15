@@ -126,7 +126,7 @@ function ClaimReviewRow({
   const { policy } = claim.purchase;
 
   return (
-    <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
+    <div className="rounded-xl border border-line bg-card p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -548,9 +548,9 @@ function ActionNotice({
 }) {
   const toneClass =
     tone === "success"
-      ? "text-emerald-700"
+      ? "text-success-700"
       : tone === "pending"
-        ? "text-amber-700"
+        ? "text-accent-700"
         : "text-muted";
   return (
     <p className={`mt-4 border-t border-line pt-4 text-sm ${toneClass}`}>

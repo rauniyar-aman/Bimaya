@@ -317,7 +317,7 @@ function PartyChoice({
         "rounded-xl border p-3 text-left transition-colors " +
         (active
           ? "border-brand-500 bg-brand-50"
-          : "border-line bg-white hover:bg-surface")
+          : "border-line bg-card hover:bg-surface")
       }
     >
       <span className="block text-sm font-medium text-ink">{title}</span>

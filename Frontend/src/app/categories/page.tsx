@@ -27,7 +27,7 @@ export default async function CategoriesPage() {
     <>
       <Navbar />
       <main className="flex-1">
-        <section className="border-b border-line bg-gradient-to-b from-brand-50/60 to-white">
+        <section className="border-b border-line bg-gradient-to-b from-brand-50/60 to-white dark:from-brand-500/10 dark:to-transparent">
           <Container className="py-10 lg:py-14">
             <h1 className="font-display text-3xl font-bold tracking-tight text-ink sm:text-4xl">
               Insurance categories
@@ -51,7 +51,7 @@ export default async function CategoriesPage() {
                   <Link
                     key={category.slug}
                     href={`/categories/${category.slug}`}
-                    className="group rounded-2xl border border-line bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-brand-200 hover:shadow-md"
+                    className="group rounded-2xl border border-line bg-card p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-brand-200 hover:shadow-md"
                   >
                     <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                       <CategoryIcon iconKey={category.icon} className="h-6 w-6" />

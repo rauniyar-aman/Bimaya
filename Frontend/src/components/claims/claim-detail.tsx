@@ -339,7 +339,7 @@ function ResubmitForm({
                       type="button"
                       onClick={() => removeRow(row.key)}
                       disabled={submitting}
-                      className="text-sm font-medium text-muted underline-offset-4 hover:text-red-600 hover:underline disabled:opacity-60"
+                      className="text-sm font-medium text-muted underline-offset-4 hover:text-danger hover:underline disabled:opacity-60"
                     >
                       Remove
                     </button>

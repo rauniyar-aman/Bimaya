@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { RequireAuth } from "@/components/auth/require-auth";
+import { ProviderPortal } from "@/components/provider/provider-portal";
 import { Footer } from "@/components/layout/footer";
 import { Navbar } from "@/components/layout/navbar";
 import { Spinner } from "@/components/ui/spinner";
@@ -19,7 +20,9 @@ export default function ProviderLayout({
           </div>
         }
       >
-        <RequireAuth roles={["PROVIDER"]}>{children}</RequireAuth>
+        <RequireAuth roles={["PROVIDER"]}>
+          <ProviderPortal>{children}</ProviderPortal>
+        </RequireAuth>
       </Suspense>
       <Footer />
     </>

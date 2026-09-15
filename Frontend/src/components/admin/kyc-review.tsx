@@ -407,7 +407,7 @@ function KycDocument({
         {!available ? (
           <span className="text-xs text-muted">Not provided</span>
         ) : failed ? (
-          <span className="text-xs text-red-600">Could not load</span>
+          <span className="text-xs text-danger">Could not load</span>
         ) : url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={url} alt={label} className="h-full w-full object-contain" />

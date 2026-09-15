@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Enable class-based dark mode: `dark:` utilities and the `.dark` token
+   overrides below both key off a `dark` class on <html>, set by the
+   ThemeProvider and the no-flash script in the root layout. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
   Bimaya design tokens.
   Palette roles (keep the weighting premium — white ~60%, blue ~25%, orange ~10%, green ~5%):
@@ -46,19 +51,69 @@
   --color-success-800: #166138;
   --color-success-900: #124e2e;
 
-  /* Semantic surfaces & text */
-  --color-background: #ffffff;
-  --color-foreground: #0f1f33;
-  --color-ink: #0f1f33;
-  --color-muted: #5b6b7f;
-  --color-surface: #f5f8fc;
-  --color-line: #e4eaf1;
-
   /* Typography */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-display: var(--font-sora), var(--font-inter), ui-sans-serif, system-ui,
     sans-serif;
+}
+
+/*
+  Semantic surface & text tokens.
+  Declared as raw custom properties so a single `.dark` override flips the
+  whole app, and mapped into Tailwind's color system via `@theme inline` below
+  (so `bg-surface`, `text-ink`, `bg-card`, `text-danger`, … emit `var(--…)` and
+  follow the active theme rather than baking in a light-mode literal).
+*/
+:root {
+  color-scheme: light;
+
+  --background: #ffffff;
+  --foreground: #0f1f33;
+  --ink: #0f1f33;
+  --muted: #5b6b7f;
+  --surface: #f5f8fc;
+  --card: #ffffff;
+  --line: #e4eaf1;
+
+  /* Destructive / error */
+  --danger: #dc2626;
+  --danger-foreground: #b42318;
+  --danger-surface: #fef2f2;
+  --danger-border: #fecaca;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: #0b1626;
+  --foreground: #e7edf5;
+  --ink: #e7edf5;
+  --muted: #93a4ba;
+  --surface: #0f1d31;
+  --card: #14243b;
+  --line: #253850;
+
+  /* Destructive / error — a lighter ink on a muted dark wash keeps contrast. */
+  --danger: #f87171;
+  --danger-foreground: #fca5a5;
+  --danger-surface: #2a1618;
+  --danger-border: #4a2327;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-line: var(--line);
+
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-danger-surface: var(--danger-surface);
+  --color-danger-border: var(--danger-border);
 }
 
 @layer base {

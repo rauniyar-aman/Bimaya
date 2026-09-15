@@ -128,7 +128,7 @@ export function FileInput({
       <div
         className={cn(
           "flex items-center gap-3 rounded-lg border border-dashed p-3",
-          invalid ? "border-red-300 bg-red-50/40" : "border-line bg-surface/40",
+          invalid ? "border-danger-border bg-danger-surface/40" : "border-line bg-surface/40",
         )}
       >
         {preview ? (
@@ -139,11 +139,11 @@ export function FileInput({
             className="h-14 w-14 shrink-0 rounded-md border border-line object-cover"
           />
         ) : name ? (
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-line bg-white text-brand-500">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-line bg-card text-brand-500">
             <DocumentIcon className="h-6 w-6" />
           </span>
         ) : (
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-line bg-white text-xs text-muted">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-line bg-card text-xs text-muted">
             No file
           </span>
         )}
@@ -178,7 +178,7 @@ export function FileInput({
       </div>
 
       {localError && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger">
           {localError}
         </p>
       )}

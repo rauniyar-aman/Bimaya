@@ -58,7 +58,7 @@ export function CompareTable({
   ];
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-line bg-white shadow-sm">
+    <div className="overflow-x-auto rounded-2xl border border-line bg-card shadow-sm">
       <table className="w-full min-w-[640px] border-collapse text-left align-top">
         <thead>
           <tr className="border-b border-line">

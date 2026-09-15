@@ -75,14 +75,14 @@ export default function ForProviders() {
         {/* Hero */}
         <section className="relative overflow-hidden">
           <div className="pointer-events-none absolute inset-0 -z-10">
-            <div className="absolute inset-0 bg-gradient-to-b from-brand-50/70 to-white" />
+            <div className="absolute inset-0 bg-gradient-to-b from-brand-50/70 to-white dark:from-brand-500/10 dark:to-transparent" />
             <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-brand-100/50 blur-3xl" />
             <div className="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-accent-100/40 blur-3xl" />
           </div>
 
           <Container className="py-16 lg:py-24">
             <div className="max-w-2xl">
-              <span className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-white px-3 py-1 text-xs font-medium text-brand-700 shadow-sm">
+              <span className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-card px-3 py-1 text-xs font-medium text-brand-700 shadow-sm">
                 <BuildingIcon className="h-3.5 w-3.5" />
                 For insurance providers
               </span>
@@ -165,7 +165,7 @@ export default function ForProviders() {
               {STEPS.map((step, i) => (
                 <div
                   key={step.title}
-                  className="relative rounded-2xl bg-white p-6 shadow-sm"
+                  className="relative rounded-2xl bg-card p-6 shadow-sm"
                 >
                   <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-500 font-display text-base font-bold text-white">
                     {i + 1}

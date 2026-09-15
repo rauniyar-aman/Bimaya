@@ -215,7 +215,7 @@ function PurchasePicker({
             key={purchase.id}
             type="button"
             onClick={() => onPick(purchase.id)}
-            className="block w-full rounded-xl border border-line bg-white p-4 text-left transition-colors hover:border-brand-200 hover:bg-surface/50"
+            className="block w-full rounded-xl border border-line bg-card p-4 text-left transition-colors hover:border-brand-200 hover:bg-surface/50"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="font-display font-semibold text-ink">

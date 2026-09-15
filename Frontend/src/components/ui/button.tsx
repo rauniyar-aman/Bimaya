@@ -20,7 +20,7 @@ const variantClasses: Record<ButtonVariant, string> = {
   success: "bg-success-500 text-white hover:bg-success-600",
   outline: "border border-brand-500 text-brand-600 hover:bg-brand-50",
   ghost: "text-brand-600 hover:bg-brand-50",
-  secondary: "border border-line bg-white text-ink hover:bg-surface",
+  secondary: "border border-line bg-card text-ink hover:bg-surface",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

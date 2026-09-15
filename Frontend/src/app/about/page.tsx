@@ -75,7 +75,7 @@ export default function AboutPage() {
               {AUDIENCE.map((item) => (
                 <div
                   key={item.title}
-                  className="rounded-2xl border border-line bg-white p-5 shadow-sm"
+                  className="rounded-2xl border border-line bg-card p-5 shadow-sm"
                 >
                   <h3 className="font-semibold text-ink">{item.title}</h3>
                   <p className="mt-2 text-sm text-muted">{item.body}</p>
@@ -100,7 +100,7 @@ export default function AboutPage() {
             </ol>
           </section>
 
-          <section className="rounded-2xl border border-line bg-white p-6 shadow-sm sm:p-8">
+          <section className="rounded-2xl border border-line bg-card p-6 shadow-sm sm:p-8">
             <h2 className="font-display text-2xl font-semibold text-ink">
               Ready to get started?
             </h2>

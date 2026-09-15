@@ -72,7 +72,7 @@ export function PolicyRow({
   }
 
   return (
-    <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
+    <div className="rounded-xl border border-line bg-card p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -120,7 +120,7 @@ export function PolicyRow({
               type="button"
               onClick={handleDelete}
               disabled={busy !== null}
-              className="rounded-lg px-2.5 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
+              className="rounded-lg px-2.5 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger-surface disabled:opacity-60"
             >
               {busy === "delete" ? "Deleting…" : "Delete"}
             </button>
@@ -130,7 +130,7 @@ export function PolicyRow({
 
       <p className="mt-2 text-xs text-muted">{meta.hint}</p>
 
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </div>
   );
 }

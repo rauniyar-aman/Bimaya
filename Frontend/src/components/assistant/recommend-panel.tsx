@@ -81,7 +81,7 @@ export function RecommendPanel() {
     <div className="space-y-8">
       <form
         onSubmit={handleSubmit}
-        className="grid gap-4 rounded-2xl border border-line bg-white p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-4 rounded-2xl border border-line bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4"
       >
         <Field label="Type of cover" htmlFor="advisor-category">
           <Select

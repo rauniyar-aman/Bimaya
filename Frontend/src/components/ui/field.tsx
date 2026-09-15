@@ -39,7 +39,7 @@ export function Field({
       {children}
 
       {error ? (
-        <p id={`${htmlFor}-error`} role="alert" className="text-sm text-red-600">
+        <p id={`${htmlFor}-error`} role="alert" className="text-sm text-danger">
           {error}
         </p>
       ) : (

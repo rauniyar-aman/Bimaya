@@ -13,7 +13,7 @@ export function PurchaseRow({ purchase }: { purchase: PolicyPurchase }) {
   return (
     <Link
       href={`/dashboard/policies/${purchase.id}`}
-      className="block rounded-xl border border-line bg-white p-4 transition-colors hover:border-brand-200 hover:bg-surface/50 sm:p-5"
+      className="block rounded-xl border border-line bg-card p-4 transition-colors hover:border-brand-200 hover:bg-surface/50 sm:p-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">

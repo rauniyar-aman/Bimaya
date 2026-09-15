@@ -58,12 +58,12 @@ function CallbackInner() {
   return (
     <main className="flex-1">
       <Container className="py-16">
-        <div className="mx-auto max-w-lg rounded-2xl border border-line bg-white p-12 text-center shadow-sm">
+        <div className="mx-auto max-w-lg rounded-2xl border border-line bg-card p-12 text-center shadow-sm">
           <span
             className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full ${
               success
                 ? "bg-success-50 text-success-600"
-                : "bg-red-50 text-red-600"
+                : "bg-danger-surface text-danger"
             }`}
           >
             {success ? (
