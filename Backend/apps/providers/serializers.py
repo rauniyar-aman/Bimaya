@@ -7,6 +7,10 @@ from .rbac import ProviderRole
 
 User = get_user_model()
 
+# A provider's company logo is capped server-side; the browser's own check is
+# only a convenience. Mirrors the customer avatar cap in ``apps.accounts``.
+LOGO_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+
 
 class ProviderLightSerializer(serializers.ModelSerializer):
     """Minimal provider fields for embedding inside policy payloads."""
@@ -37,6 +41,7 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
     """
 
     public_id = serializers.CharField(read_only=True)
+    logo = serializers.ImageField(required=False, allow_null=True)
     my_role = serializers.SerializerMethodField()
     my_permissions = serializers.SerializerMethodField()
 
@@ -78,6 +83,13 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
         return role_for(user, obj)
+
+    def validate_logo(self, image):
+        if image is not None and image.size > LOGO_MAX_BYTES:
+            raise serializers.ValidationError(
+                "That image is over 5 MB. Please choose a smaller file."
+            )
+        return image
 
     def get_my_permissions(self, obj) -> list[str]:
         request = self.context.get("request")

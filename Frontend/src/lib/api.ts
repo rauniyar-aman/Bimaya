@@ -1256,6 +1256,20 @@ export const api = {
       method: "PUT" | "PATCH" = "PUT",
     ) => authFetch<ProviderProfile>("/provider/profile/", { method, json: payload }),
 
+    /**
+     * Upload or replace the company logo (multipart). Only valid once the profile
+     * exists — needs `company.edit`.
+     */
+    saveLogo: (authFetch: AuthFetch, form: FormData) =>
+      authFetch<ProviderProfile>("/provider/profile/", { method: "PATCH", form }),
+
+    /** Remove the company logo (a JSON null clears the stored image). */
+    removeLogo: (authFetch: AuthFetch) =>
+      authFetch<ProviderProfile>("/provider/profile/", {
+        method: "PATCH",
+        json: { logo: null },
+      }),
+
     /** Analytics scoped to this provider's own policies. */
     analytics: (authFetch: AuthFetch) =>
       authFetch<ProviderAnalytics>("/provider/analytics/"),

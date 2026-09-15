@@ -5,9 +5,11 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useProviderPortal } from "@/components/provider/provider-portal";
 import { Alert } from "@/components/ui/alert";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
+import { FileInput } from "@/components/ui/file-input";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -30,6 +32,13 @@ const KYC_META: Record<
   VERIFIED: { variant: "active", label: "KYC verified" },
   REJECTED: { variant: "failed", label: "KYC rejected" },
 };
+
+/** Up to two initials from the company name, for the logo placeholder. */
+function companyInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters = parts.slice(0, 2).map((part) => part[0]);
+  return letters.join("").toUpperCase() || "?";
+}
 
 type LoadState =
   | { phase: "loading" }
@@ -108,6 +117,55 @@ function ProfileFields({ profile }: { profile: ProviderProfile | null }) {
   const [saved, setSaved] = useState(false);
   const [pending, setPending] = useState(false);
 
+  // The logo uploads immediately (not on the details-form submit), so it carries
+  // its own state. `logo` mirrors the saved image so the preview updates at once;
+  // `pickerKey` remounts the file picker after each change to clear its preview.
+  const [logo, setLogo] = useState<string | null>(profile?.logo ?? null);
+  const [logoError, setLogoError] = useState("");
+  const [logoPending, setLogoPending] = useState(false);
+  const [pickerKey, setPickerKey] = useState(0);
+
+  async function handleLogoFile(file: File | null) {
+    // The picker also fires `null` when its selection is cleared; only a real
+    // file means "upload this".
+    if (!file) return;
+    setLogoError("");
+    setLogoPending(true);
+
+    const body = new FormData();
+    body.append("logo", file);
+    try {
+      const updated = await api.provider.saveLogo(authFetch, body);
+      setLogo(updated.logo);
+      // Keep the portal shell's cached profile (dashboard header) in step.
+      refresh();
+    } catch (error) {
+      setLogoError(
+        errorMessage(error, "We could not update your logo. Please try again."),
+      );
+    } finally {
+      setLogoPending(false);
+      setPickerKey((key) => key + 1);
+    }
+  }
+
+  async function handleRemoveLogo() {
+    setLogoError("");
+    setLogoPending(true);
+    try {
+      const updated = await api.provider.removeLogo(authFetch);
+      setLogo(updated.logo);
+      refresh();
+    } catch (error) {
+      setLogoError(
+        errorMessage(error, "We could not remove your logo. Please try again."),
+      );
+    } finally {
+      setLogoPending(false);
+      setPickerKey((key) => key + 1);
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrors({});
@@ -168,6 +226,48 @@ function ProfileFields({ profile }: { profile: ProviderProfile | null }) {
       </CardHeader>
 
       <CardContent>
+        {!isCreate && (
+          <div className="mb-6 border-b border-line pb-6">
+            <p className="text-sm font-medium text-ink">Company logo</p>
+            <div className="mt-3 flex items-start gap-4">
+              <Avatar
+                src={logo}
+                fallback={companyInitials(companyName)}
+                alt={`${companyName} logo`}
+                size="lg"
+                shape="square"
+              />
+              {canEdit && (
+                <div className="min-w-0 flex-1">
+                  <FileInput
+                    key={pickerKey}
+                    id="provider_logo"
+                    onFile={handleLogoFile}
+                    disabled={logoPending}
+                  />
+                  {logo && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2"
+                      disabled={logoPending}
+                      onClick={handleRemoveLogo}
+                    >
+                      Remove logo
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+            {logoError && (
+              <Alert variant="error" className="mt-3">
+                {logoError}
+              </Alert>
+            )}
+          </div>
+        )}
+
         {!canEdit && (
           <Alert variant="info" className="mb-5">
             You do not have permission to edit the company profile. These details

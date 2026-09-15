@@ -2,8 +2,15 @@
 
 from unittest import mock
 
+import io
+import shutil
+import tempfile
+
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -15,6 +22,16 @@ no_throttle = mock.patch(
     "rest_framework.throttling.SimpleRateThrottle.allow_request",
     new=lambda self, request, view: True,
 )
+
+# Logo uploads land in a throwaway media root so tests never touch real storage.
+_LOGO_MEDIA_ROOT = tempfile.mkdtemp(prefix="bimaya-logo-tests-")
+
+
+def _png_upload(name="logo.png", color=(26, 84, 147)):
+    """A small but genuinely valid PNG, so ImageField's Pillow check passes."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (16, 16), color).save(buffer, format="PNG")
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/png")
 
 
 @no_throttle
@@ -80,3 +97,66 @@ class ProviderProfileTests(APITestCase):
     def test_anonymous_is_unauthorized(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+@no_throttle
+@override_settings(MEDIA_ROOT=_LOGO_MEDIA_ROOT)
+class ProviderLogoTests(APITestCase):
+    """Uploading, replacing and removing the company logo via the profile."""
+
+    def setUp(self):
+        self.url = reverse("provider-profile")
+        self.owner = User.objects.create_user(
+            email="logo.owner@bimaya.test",
+            password="Himalaya#2026",
+            role=User.Role.PROVIDER,
+            is_verified=True,
+        )
+        # A logo attaches to an existing profile, so create one up front.
+        self.provider = Provider.objects.create(
+            user=self.owner, company_name="Everest Life"
+        )
+        self.client.force_authenticate(self.owner)
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(_LOGO_MEDIA_ROOT, ignore_errors=True)
+
+    def test_logo_can_be_uploaded(self):
+        response = self.client.patch(
+            self.url, {"logo": _png_upload()}, format="multipart"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.provider.refresh_from_db()
+        self.assertTrue(self.provider.logo.name.startswith("providers/logos/"))
+        # The API returns an absolute media URL the browser can load directly.
+        self.assertTrue(
+            response.data["logo"].startswith(
+                "http://testserver/media/providers/logos/"
+            )
+        )
+
+    def test_logo_can_be_removed(self):
+        self.client.patch(self.url, {"logo": _png_upload()}, format="multipart")
+        response = self.client.patch(self.url, {"logo": None}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["logo"])
+        self.provider.refresh_from_db()
+        self.assertFalse(self.provider.logo)
+
+    def test_oversized_logo_is_rejected(self):
+        with mock.patch("apps.providers.serializers.LOGO_MAX_BYTES", 8):
+            response = self.client.patch(
+                self.url, {"logo": _png_upload()}, format="multipart"
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("logo", response.data["errors"])
+
+    def test_non_image_upload_is_rejected(self):
+        bogus = SimpleUploadedFile(
+            "logo.txt", b"not an image", content_type="text/plain"
+        )
+        response = self.client.patch(self.url, {"logo": bogus}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("logo", response.data["errors"])
