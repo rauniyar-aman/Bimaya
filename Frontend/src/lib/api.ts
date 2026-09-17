@@ -817,10 +817,81 @@ export interface AdminUser {
   date_joined: string;
 }
 
-/** A single user with activity counts. */
+/** A compact KYC row on a user's admin detail page. */
+export interface AdminUserKycRow {
+  id: number;
+  is_self: boolean;
+  document_type: DocumentType;
+  full_name: string;
+  status: KycStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A compact purchase row on a user's admin detail page. */
+export interface AdminUserPurchaseRow {
+  id: number;
+  policy_name: string;
+  status: PurchaseStatus;
+  policy_number: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string;
+}
+
+/** A compact claim row on a user's admin detail page. */
+export interface AdminUserClaimRow {
+  id: number;
+  policy_name: string;
+  status: ClaimStatus;
+  claimed_amount: string;
+  approved_amount: string | null;
+  created_at: string;
+  decided_at: string | null;
+  settled_at: string | null;
+}
+
+/**
+ * A single user with activity counts and their recent records. The full
+ * blow-by-blow lives in the history timeline, so the nested lists here are
+ * bounded snapshots (most recent ten of each).
+ */
 export interface AdminUserDetail extends AdminUser {
+  avatar: string | null;
+  last_login: string | null;
   purchase_count: number;
   claim_count: number;
+  kyc_records: AdminUserKycRow[];
+  recent_purchases: AdminUserPurchaseRow[];
+  recent_claims: AdminUserClaimRow[];
+}
+
+/** A compact policy row on a provider's admin detail page. */
+export interface AdminProviderPolicyRow {
+  id: number;
+  name: string;
+  slug: string;
+  status: PolicyStatus;
+  premium: string;
+  premium_frequency: PremiumFrequency;
+  coverage_amount: string;
+  created_at: string;
+}
+
+/**
+ * A single provider with its team, KYC paperwork, recent policies and summary
+ * totals. The list table keeps the lean `AdminProvider` shape.
+ */
+export interface AdminProviderDetail extends AdminProvider {
+  memberships: ProviderMember[];
+  kyc_documents: ProviderKycDocument[];
+  recent_policies: AdminProviderPolicyRow[];
+  active_policies: number;
+  purchase_count: number;
+  /** Sum of every payout owed to the provider, net of platform commission. */
+  payout_net_total: string;
+  /** Claims on this provider's policies still awaiting a decision. */
+  pending_claims: number;
 }
 
 /** A policy row in the admin all-policies table (reuses the public list shape plus status). */
@@ -918,6 +989,37 @@ export interface AdminPolicyListParams {
   category?: number;
   is_featured?: boolean;
   search?: string;
+  page?: number;
+}
+
+/**
+ * Where a timeline event came from: `"activity"` is the subject's own record
+ * (a purchase, a claim, a policy), `"admin"` an administrator's action on them.
+ * Admin rows are returned only to a caller who also holds `audit_log.view`;
+ * otherwise the timeline is activity-only.
+ */
+export type HistoryEventSource = "activity" | "admin";
+
+/** One event in a user's or provider's merged chronological history. */
+export interface HistoryEvent {
+  /** Stable within a timeline (e.g. `purchase:42`, `audit:17`) — good as a key. */
+  id: string;
+  timestamp: string;
+  source: HistoryEventSource;
+  /** Coarse grouping for the row's pill: `purchase`, `claim`, `policy`, … */
+  category: string;
+  action: string;
+  title: string;
+  detail: string;
+  status: string;
+  actor: string;
+  /** Pre-formatted money string, or null when the event carries no amount. */
+  amount: string | null;
+  ref_type: string;
+  ref_id: string;
+}
+
+export interface AdminHistoryParams {
   page?: number;
 }
 
@@ -1588,7 +1690,20 @@ export const api = {
       ),
 
     getProvider: (authFetch: AuthFetch, id: number) =>
-      authFetch<AdminProvider>(`/admin/providers/${id}/`),
+      authFetch<AdminProviderDetail>(`/admin/providers/${id}/`),
+
+    /**
+     * A provider's merged chronological history: their own activity (KYC,
+     * team, policies, payouts, claims) plus the admin actions taken on them.
+     */
+    getProviderHistory: (
+      authFetch: AuthFetch,
+      id: number,
+      params: AdminHistoryParams = {},
+    ) =>
+      authFetch<Paginated<HistoryEvent>>(
+        `/admin/providers/${id}/history/${toQuery(params as Record<string, unknown>)}`,
+      ),
 
     approveProvider: (authFetch: AuthFetch, id: number) =>
       authFetch<AdminProvider>(`/admin/providers/${id}/approve/`, {
@@ -1725,6 +1840,20 @@ export const api = {
 
     getUser: (authFetch: AuthFetch, id: number) =>
       authFetch<AdminUserDetail>(`/admin/users/${id}/`),
+
+    /**
+     * A user's merged chronological history: their own activity (KYC,
+     * purchases, payments, claims and claim messages) plus the admin actions
+     * taken on them.
+     */
+    getUserHistory: (
+      authFetch: AuthFetch,
+      id: number,
+      params: AdminHistoryParams = {},
+    ) =>
+      authFetch<Paginated<HistoryEvent>>(
+        `/admin/users/${id}/history/${toQuery(params as Record<string, unknown>)}`,
+      ),
 
     /** Suspend a user (deactivate their account so they can no longer sign in). */
     suspendUser: (authFetch: AuthFetch, id: number) =>

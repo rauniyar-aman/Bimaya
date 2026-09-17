@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ROLE_FILTERS } from "@/components/admin/filters";
 import { ROLE_META } from "@/components/admin/status-meta";
 import { ExportButton } from "@/components/admin/export-button";
 import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
@@ -19,7 +20,6 @@ import {
   api,
   errorMessage,
   type AdminUser,
-  type AdminUserDetail,
   type Paginated,
   type UserRole,
 } from "@/lib/api";
@@ -33,7 +33,7 @@ type State =
 
 type Pending = { user: AdminUser; action: "suspend" | "reactivate" };
 
-/** Admin users table with role filter, search, a detail modal and suspend / reactivate. */
+/** Admin users table with role filter, search, suspend / reactivate and a link to each account. */
 export function UsersTable() {
   const { authFetch } = useAuth();
   const [state, setState] = useState<State>({ phase: "loading" });
@@ -41,7 +41,6 @@ export function UsersTable() {
   const [role, setRole] = useState("");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
-  const [activeId, setActiveId] = useState<number | null>(null);
 
   const [pending, setPending] = useState<Pending | null>(null);
   const [working, setWorking] = useState(false);
@@ -201,13 +200,15 @@ export function UsersTable() {
                     <TD className="text-muted">{formatDate(u.date_joined)}</TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setActiveId(u.id)}
+                        <Link
+                          href={`/admin/users/${u.id}`}
+                          className={buttonVariants({
+                            variant: "ghost",
+                            size: "sm",
+                          })}
                         >
                           View
-                        </Button>
+                        </Link>
                         {u.role !== "ADMIN" &&
                           (u.is_active ? (
                             <Button
@@ -291,98 +292,6 @@ export function UsersTable() {
           </div>
         )}
       </Modal>
-
-      <UserDetailModal
-        key={activeId ?? "none"}
-        userId={activeId}
-        onClose={() => setActiveId(null)}
-      />
-    </div>
-  );
-}
-
-type DetailState =
-  | { phase: "loading" }
-  | { phase: "error" }
-  | { phase: "ready"; user: AdminUserDetail };
-
-function UserDetailModal({
-  userId,
-  onClose,
-}: {
-  userId: number | null;
-  onClose: () => void;
-}) {
-  const { authFetch } = useAuth();
-  const [state, setState] = useState<DetailState>({ phase: "loading" });
-
-  useEffect(() => {
-    if (userId === null) return;
-    let cancelled = false;
-    api.admin
-      .getUser(authFetch, userId)
-      .then((user) => {
-        if (!cancelled) setState({ phase: "ready", user });
-      })
-      .catch(() => {
-        if (!cancelled) setState({ phase: "error" });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [authFetch, userId]);
-
-  return (
-    <Modal open={userId !== null} onClose={onClose} title="User details">
-      {state.phase === "loading" && (
-        <div className="flex items-center justify-center py-10">
-          <Spinner className="h-5 w-5 text-brand-500" />
-        </div>
-      )}
-
-      {state.phase === "error" && (
-        <Alert variant="error">We could not load this user.</Alert>
-      )}
-
-      {state.phase === "ready" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="font-display text-lg font-semibold text-ink">
-                {state.user.full_name || "—"}
-              </p>
-              <p className="text-xs text-muted">{state.user.email}</p>
-            </div>
-            <StatusPill status={ROLE_META[state.user.role].variant}>
-              {ROLE_META[state.user.role].label}
-            </StatusPill>
-          </div>
-
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-xl border border-line bg-surface/40 p-4 text-sm">
-            <Detail label="Phone">{state.user.phone || "—"}</Detail>
-            <Detail label="Joined">{formatDate(state.user.date_joined)}</Detail>
-            <Detail label="Purchases">{state.user.purchase_count}</Detail>
-            <Detail label="Claims">{state.user.claim_count}</Detail>
-            <Detail label="Verified">{state.user.is_verified ? "Yes" : "No"}</Detail>
-            <Detail label="Active">{state.user.is_active ? "Yes" : "No"}</Detail>
-          </dl>
-
-          <div className="flex justify-end border-t border-line pt-4">
-            <Button variant="secondary" onClick={onClose}>
-              Close
-            </Button>
-          </div>
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-function Detail({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-muted">{label}</dt>
-      <dd className="mt-0.5 text-ink">{children}</dd>
     </div>
   );
 }

@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from apps.core.permissions import IsCustomer, IsVerified
 
 from apps.notifications import services as notifications
+from apps.staff.services import record_audit
 
 from .gateways import esewa, khalti
 from .models import Payment
@@ -67,7 +68,11 @@ class PaymentCallbackView(APIView):
         payment_id = module.resolve_payment_id(payload)
         payment = (
             Payment.objects.filter(id=payment_id, gateway=gateway_code)
-            .select_related("policy_purchase", "policy_purchase__policy")
+            .select_related(
+                "policy_purchase",
+                "policy_purchase__policy",
+                "policy_purchase__customer",
+            )
             .first()
             if payment_id is not None
             else None
@@ -88,6 +93,18 @@ class PaymentCallbackView(APIView):
             )
             payment.mark_success(transaction_id)
             notifications.notify_payment_confirmed(payment.policy_purchase)
+            # The gateway calls this endpoint, not the browser, so the acting
+            # user is the customer whose purchase was paid for — not request.user
+            # (anonymous here).
+            record_audit(
+                actor=payment.policy_purchase.customer,
+                action="payment.success",
+                module="payment",
+                entity_type="Payment",
+                entity_id=payment.pk,
+                changes={"status": [None, payment.status], "gateway": payment.gateway},
+                request=self.request,
+            )
             return Response({"detail": "Payment confirmed.", "status": payment.status})
 
         payment.mark_failed()

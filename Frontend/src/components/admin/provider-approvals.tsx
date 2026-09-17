@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { PROVIDER_FILTERS } from "@/components/admin/filters";
@@ -209,9 +210,12 @@ export function ProviderApprovals() {
                 return (
                   <TR key={provider.id}>
                     <TD>
-                      <div className="font-medium text-ink">
+                      <Link
+                        href={`/admin/providers/${provider.id}`}
+                        className="font-medium text-ink underline-offset-4 transition-colors hover:text-brand-600 hover:underline"
+                      >
                         {provider.company_name}
-                      </div>
+                      </Link>
                       <div className="text-xs text-muted">
                         <span className="font-mono">{provider.public_id}</span> ·
                         Joined {formatDate(provider.created_at)}

@@ -24,6 +24,7 @@ from apps.notifications import services as notifications
 from apps.providers.access import HasProviderPermission, provider_for
 from apps.providers.rbac import ProviderPerm
 from apps.payments.models import Payment
+from apps.staff.services import record_audit
 
 from . import pdf
 from .exceptions import (
@@ -70,8 +71,18 @@ class PolicyPurchaseListCreateView(PurchaseBase, ListCreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
-        notifications.notify_purchase_created(serializer.instance)
-        output = PolicyPurchaseSerializer(serializer.instance).data
+        purchase = serializer.instance
+        notifications.notify_purchase_created(purchase)
+        record_audit(
+            actor=request.user,
+            action="purchase.create",
+            module="purchase",
+            entity_type="PolicyPurchase",
+            entity_id=purchase.pk,
+            changes={"policy": purchase.policy.name, "status": purchase.status},
+            request=request,
+        )
+        output = PolicyPurchaseSerializer(purchase).data
         headers = self.get_success_headers(output)
         return Response(output, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -257,6 +268,18 @@ class ProviderIssueView(ProviderIssuanceBase, GenericAPIView):
         serializer.is_valid(raise_exception=True)
         purchase.issue(serializer.validated_data["policy_number"])
         notifications.notify_policy_issued(purchase)
+        record_audit(
+            actor=request.user,
+            action=ProviderPerm.ISSUANCE_ISSUE,
+            module="issuance",
+            entity_type="PolicyPurchase",
+            entity_id=purchase.pk,
+            changes={
+                "status": [PolicyPurchase.Status.FORWARDED, purchase.status],
+                "policy_number": [None, purchase.policy_number],
+            },
+            request=request,
+        )
         return Response(
             PolicyPurchaseSerializer(purchase).data, status=status.HTTP_200_OK
         )

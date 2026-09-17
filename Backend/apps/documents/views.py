@@ -13,6 +13,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
 from apps.core.permissions import IsCustomer, IsVerified
+from apps.staff.services import record_audit
 
 from .exceptions import SelfKycNotFound
 from .models import CustomerKyc
@@ -60,6 +61,20 @@ class SelfKycView(GenericAPIView):
             status=CustomerKyc.Status.PENDING,
             review_note="",
         )
+        record_audit(
+            actor=request.user,
+            action="customer_kyc.submit",
+            module="kyc",
+            entity_type="CustomerKyc",
+            entity_id=instance.pk,
+            changes={
+                "is_self": True,
+                "document_type": instance.document_type,
+                "status": instance.status,
+            },
+            reason="created" if is_create else "resubmitted",
+            request=request,
+        )
         return Response(
             CustomerKycSerializer(instance).data,
             status=status.HTTP_201_CREATED if is_create else status.HTTP_200_OK,
@@ -81,6 +96,19 @@ class BeneficiaryKycCreateView(CreateAPIView):
             customer=request.user,
             is_self=False,
             status=CustomerKyc.Status.PENDING,
+        )
+        record_audit(
+            actor=request.user,
+            action="customer_kyc.submit",
+            module="kyc",
+            entity_type="CustomerKyc",
+            entity_id=instance.pk,
+            changes={
+                "is_self": False,
+                "document_type": instance.document_type,
+                "status": instance.status,
+            },
+            request=request,
         )
         return Response(
             CustomerKycSerializer(instance).data, status=status.HTTP_201_CREATED

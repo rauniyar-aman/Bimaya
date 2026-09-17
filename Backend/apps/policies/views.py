@@ -20,6 +20,7 @@ from rest_framework.response import Response
 
 from apps.providers.access import HasProviderPermission, provider_for
 from apps.providers.rbac import ProviderPerm
+from apps.staff.services import record_audit
 
 from .exceptions import (
     PolicyNotDeactivatable,
@@ -172,6 +173,15 @@ class ProviderPolicyListCreateView(ProviderPolicyBase, ListCreateAPIView):
         # view does not set ``allow_onboarding``, so a provider with no profile
         # is refused there and ``get_provider`` is never None here.
         serializer.save(provider=self.get_provider(), status=Policy.Status.DRAFT)
+        record_audit(
+            actor=self.request.user,
+            action=ProviderPerm.POLICY_CREATE,
+            module="policy",
+            entity_type="Policy",
+            entity_id=serializer.instance.pk,
+            changes={"name": serializer.instance.name, "status": Policy.Status.DRAFT},
+            request=self.request,
+        )
 
 
 @extend_schema(tags=PROVIDER_TAG, summary="Retrieve, update or delete an own policy")
@@ -209,8 +219,18 @@ class ProviderPolicySubmitView(ProviderPolicyBase, GenericAPIView):
         policy = get_object_or_404(self.get_queryset(), pk=pk)
         if policy.status not in (Policy.Status.DRAFT, Policy.Status.INACTIVE):
             raise PolicyNotSubmittable()
+        previous = policy.status
         policy.status = Policy.Status.PENDING
         policy.save(update_fields=["status", "updated_at"])
+        record_audit(
+            actor=request.user,
+            action=ProviderPerm.POLICY_SUBMIT,
+            module="policy",
+            entity_type="Policy",
+            entity_id=policy.pk,
+            changes={"status": [previous, policy.status]},
+            request=request,
+        )
         return Response(self.get_serializer(policy).data, status=status.HTTP_200_OK)
 
 

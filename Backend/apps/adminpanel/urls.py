@@ -18,6 +18,7 @@ from .views import (
     AdminPolicyReportView,
     AdminProviderApproveView,
     AdminProviderDetailView,
+    AdminProviderHistoryView,
     AdminProviderListView,
     AdminProviderMemberDetailView,
     AdminProviderMemberListCreateView,
@@ -32,6 +33,7 @@ from .views import (
     AdminPurchaseListView,
     AdminPurchaseReportView,
     AdminUserDetailView,
+    AdminUserHistoryView,
     AdminUserListView,
     AdminUserReactivateView,
     AdminUserReportView,
@@ -45,6 +47,11 @@ urlpatterns = [
         "providers/<int:pk>/",
         AdminProviderDetailView.as_view(),
         name="admin-provider-detail",
+    ),
+    path(
+        "providers/<int:pk>/history/",
+        AdminProviderHistoryView.as_view(),
+        name="admin-provider-history",
     ),
     path(
         "providers/<int:pk>/approve/",
@@ -119,6 +126,11 @@ urlpatterns = [
     # Users
     path("users/", AdminUserListView.as_view(), name="admin-user-list"),
     path("users/<int:pk>/", AdminUserDetailView.as_view(), name="admin-user-detail"),
+    path(
+        "users/<int:pk>/history/",
+        AdminUserHistoryView.as_view(),
+        name="admin-user-history",
+    ),
     path(
         "users/<int:pk>/suspend/",
         AdminUserSuspendView.as_view(),

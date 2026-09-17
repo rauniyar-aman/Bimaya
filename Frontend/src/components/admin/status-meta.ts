@@ -3,6 +3,7 @@ import type {
   KycStatus,
   PayoutStatus,
   PolicyStatus,
+  ProviderRole,
   PurchaseStatus,
   UserRole,
 } from "@/lib/api";
@@ -52,4 +53,21 @@ export const PAYOUT_STATUS_META: Record<
 > = {
   PENDING: { variant: "pending", label: "Pending" },
   PAID: { variant: "active", label: "Paid" },
+};
+
+/**
+ * The role one person holds inside a provider organisation. The owner is the
+ * account the organisation was created under, so it reads as the active role;
+ * every assignable role is informational.
+ */
+export const PROVIDER_ROLE_META: Record<
+  ProviderRole,
+  { variant: StatusVariant; label: string }
+> = {
+  OWNER: { variant: "active", label: "Owner" },
+  COMPANY_ADMIN: { variant: "info", label: "Company Admin" },
+  POLICY_MANAGER: { variant: "info", label: "Policy Manager" },
+  CLAIMS_OFFICER: { variant: "info", label: "Claims Officer" },
+  SALES_MANAGER: { variant: "info", label: "Sales Manager" },
+  FINANCE_VIEWER: { variant: "info", label: "Finance Viewer" },
 };

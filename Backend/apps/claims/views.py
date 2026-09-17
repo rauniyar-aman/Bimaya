@@ -34,6 +34,7 @@ from apps.core.permissions import (
 from apps.notifications import services as notifications
 from apps.providers.access import HasProviderPermission, provider_for
 from apps.providers.rbac import ProviderPerm
+from apps.staff.services import record_audit
 
 from .exceptions import (
     ClaimNotDecidable,
@@ -98,6 +99,18 @@ class ClaimListCreateView(ClaimBase, ListCreateAPIView):
         claim = serializer.instance
         notifications.notify_claim_status(claim, "SUBMITTED")
         notifications.notify_provider_new_claim(claim)
+        record_audit(
+            actor=request.user,
+            action="claim.submit",
+            module="claim",
+            entity_type="Claim",
+            entity_id=claim.pk,
+            changes={
+                "status": [None, claim.status],
+                "claimed_amount": str(claim.claimed_amount),
+            },
+            request=request,
+        )
         output = ClaimSerializer(claim).data
         headers = self.get_success_headers(output)
         return Response(output, status=status.HTTP_201_CREATED, headers=headers)
@@ -158,6 +171,15 @@ class ClaimMessageCreateView(ClaimBase, GenericAPIView):
             body=serializer.validated_data["body"],
         )
         notifications.notify_claim_message(claim, to="provider")
+        record_audit(
+            actor=request.user,
+            action="claim.message",
+            module="claim",
+            entity_type="Claim",
+            entity_id=claim.pk,
+            changes={"from": "customer"},
+            request=request,
+        )
         fresh = get_object_or_404(self.get_queryset(), pk=pk)
         return Response(ClaimSerializer(fresh).data, status=status.HTTP_200_OK)
 
@@ -260,6 +282,15 @@ class ProviderClaimMessageCreateView(ProviderClaimBase, GenericAPIView):
             body=serializer.validated_data["body"],
         )
         notifications.notify_claim_message(claim, to="customer")
+        record_audit(
+            actor=request.user,
+            action=ProviderPerm.CLAIM_MESSAGE,
+            module="claim",
+            entity_type="Claim",
+            entity_id=claim.pk,
+            changes={"from": "provider"},
+            request=request,
+        )
         fresh = self.get_claim(pk)
         return Response(ClaimSerializer(fresh).data, status=status.HTTP_200_OK)
 

@@ -33,7 +33,7 @@ from apps.providers.rbac import OWNER
 from apps.purchases.models import PolicyPurchase, ProviderPayout
 from apps.staff.permissions import HasStaffPermission
 from apps.staff.rbac import Perm
-from apps.staff.services import record_audit
+from apps.staff.services import record_audit, staff_permissions
 
 from .analytics import build_admin_analytics
 from .exceptions import (
@@ -41,12 +41,15 @@ from .exceptions import (
     PurchaseNotForwardable,
     UserNotSuspendable,
 )
+from .history import build_provider_history, build_user_history
 from .reports import csv_response, local_date, money, yes_no
 from .serializers import (
+    AdminHistoryEventSerializer,
     AdminKycSerializer,
     AdminPayoutSerializer,
     AdminPolicySerializer,
     AdminProviderCommissionSerializer,
+    AdminProviderDetailSerializer,
     AdminProviderSerializer,
     AdminPurchaseSerializer,
     AdminUserDetailSerializer,
@@ -118,12 +121,39 @@ class AdminProviderListView(AdminBase, ListAPIView):
 @extend_schema(tags=ADMIN_TAG, summary="Retrieve a provider")
 class AdminProviderDetailView(AdminBase, RetrieveAPIView):
     required_permission = Perm.PROVIDER_VIEW
-    serializer_class = AdminProviderSerializer
+    serializer_class = AdminProviderDetailSerializer
 
     def get_queryset(self):
         return Provider.objects.select_related("user").annotate(
             policy_count=Count("policies")
         )
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="A provider's full activity and admin-action history",
+    responses=AdminHistoryEventSerializer(many=True),
+)
+class AdminProviderHistoryView(AdminBase, GenericAPIView):
+    """The merged chronological timeline for one insurance provider.
+
+    The provider's own activity (KYC uploads, team changes, policies, payouts,
+    claims filed against them) merged with the administrative actions taken on
+    them. The admin-action rows are included only when the caller *also* holds
+    :data:`~apps.staff.rbac.Perm.AUDIT_LOG_VIEW` — the same boundary that gates
+    the global audit-log screen; otherwise the timeline is activity-only.
+    """
+
+    required_permission = Perm.PROVIDER_VIEW
+    serializer_class = AdminHistoryEventSerializer
+
+    def get(self, request, pk):
+        provider = get_object_or_404(Provider.objects.select_related("user"), pk=pk)
+        include_admin = Perm.AUDIT_LOG_VIEW in staff_permissions(request.user)
+        events = build_provider_history(provider, include_admin=include_admin)
+        page = self.paginate_queryset(events)
+        serializer = self.get_serializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
 
 
 @extend_schema(
@@ -778,6 +808,33 @@ class AdminUserReactivateView(AdminBase, GenericAPIView):
                 request=request,
             )
         return Response(AdminUserSerializer(user).data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=ADMIN_TAG,
+    summary="A user's full activity and admin-action history",
+    responses=AdminHistoryEventSerializer(many=True),
+)
+class AdminUserHistoryView(AdminBase, GenericAPIView):
+    """The merged chronological timeline for one user.
+
+    Their own activity (KYC, purchases, payments, claims and claim messages)
+    merged with the administrative actions taken on them. The admin-action rows
+    are included only when the caller *also* holds
+    :data:`~apps.staff.rbac.Perm.AUDIT_LOG_VIEW` — the same boundary that gates
+    the global audit-log screen; otherwise the timeline is activity-only.
+    """
+
+    required_permission = Perm.CUSTOMER_VIEW
+    serializer_class = AdminHistoryEventSerializer
+
+    def get(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+        include_admin = Perm.AUDIT_LOG_VIEW in staff_permissions(request.user)
+        events = build_user_history(user, include_admin=include_admin)
+        page = self.paginate_queryset(events)
+        serializer = self.get_serializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
 
 
 # --- Policies ---------------------------------------------------------------

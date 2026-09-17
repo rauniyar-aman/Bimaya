@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
+import { PROVIDER_ROLE_META } from "@/components/admin/status-meta";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -19,21 +20,8 @@ import {
   type AdminProvider,
   type AssignableProviderRole,
   type ProviderMember,
-  type ProviderRole,
 } from "@/lib/api";
 import { formatDate } from "@/lib/date";
-
-const ROLE_META: Record<
-  ProviderRole,
-  { variant: "active" | "info"; label: string }
-> = {
-  OWNER: { variant: "active", label: "Owner" },
-  COMPANY_ADMIN: { variant: "info", label: "Company Admin" },
-  POLICY_MANAGER: { variant: "info", label: "Policy Manager" },
-  CLAIMS_OFFICER: { variant: "info", label: "Claims Officer" },
-  SALES_MANAGER: { variant: "info", label: "Sales Manager" },
-  FINANCE_VIEWER: { variant: "info", label: "Finance Viewer" },
-};
 
 /** The roles an admin can assign to a member, with a short reach descriptor. */
 const ASSIGNABLE_ROLES: { value: AssignableProviderRole; hint: string }[] = [
@@ -228,7 +216,7 @@ export function ProviderMembersModal({
                 </THead>
                 <TBody>
                   {state.members.map((member) => {
-                    const meta = ROLE_META[member.role];
+                    const meta = PROVIDER_ROLE_META[member.role];
                     const isOwner = member.membership_id === null;
                     const busy = busyId === member.user_id;
                     return (
@@ -267,7 +255,7 @@ export function ProviderMembersModal({
                             >
                               {ASSIGNABLE_ROLES.map((r) => (
                                 <option key={r.value} value={r.value}>
-                                  {ROLE_META[r.value].label}
+                                  {PROVIDER_ROLE_META[r.value].label}
                                 </option>
                               ))}
                             </Select>
@@ -368,7 +356,7 @@ export function ProviderMembersModal({
                       </option>
                       {ASSIGNABLE_ROLES.map((r) => (
                         <option key={r.value} value={r.value}>
-                          {ROLE_META[r.value].label} — {r.hint}
+                          {PROVIDER_ROLE_META[r.value].label} — {r.hint}
                         </option>
                       ))}
                     </Select>
