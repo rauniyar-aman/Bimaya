@@ -173,7 +173,7 @@ function CheckoutInner({ slug }: { slug: string }) {
 
                 <Link
                   href={`/policies/${policy.slug}`}
-                  className="block text-center text-sm font-medium text-brand-600 underline-offset-4 hover:underline"
+                  className="block text-center text-sm font-medium text-brand-ink underline-offset-4 hover:underline"
                 >
                   Back to plan details
                 </Link>

@@ -139,7 +139,7 @@ export default function TermsPage() {
                 Questions about these terms? Email{" "}
                 <a
                   href="mailto:support@bimaya.com"
-                  className="font-medium text-brand-600 underline-offset-4 hover:underline"
+                  className="font-medium text-brand-ink underline-offset-4 hover:underline"
                 >
                   support@bimaya.com
                 </a>

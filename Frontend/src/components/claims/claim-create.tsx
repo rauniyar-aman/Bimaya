@@ -76,7 +76,7 @@ export function ClaimCreate({ purchaseId }: { purchaseId?: number }) {
       <nav aria-label="Breadcrumb" className="text-sm text-muted">
         <Link
           href="/dashboard/claims"
-          className="underline-offset-4 transition-colors hover:text-brand-600 hover:underline"
+          className="underline-offset-4 transition-colors hover:text-brand-ink hover:underline"
         >
           My claims
         </Link>
@@ -187,7 +187,7 @@ function SelectedPurchase({
           <button
             type="button"
             onClick={onChange}
-            className="text-sm font-medium text-brand-600 underline-offset-4 hover:underline"
+            className="text-sm font-medium text-brand-ink underline-offset-4 hover:underline"
           >
             Change
           </button>

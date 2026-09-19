@@ -42,7 +42,7 @@ export function CompareTable({
     {
       label: "Premium",
       render: (p) => (
-        <span className="font-display font-semibold text-brand-600">
+        <span className="font-display font-semibold text-brand-ink">
           {formatNpr(p.premium)}{" "}
           <span className="text-xs font-medium text-muted">
             {formatFrequency(p.premium_frequency)}
@@ -78,7 +78,7 @@ export function CompareTable({
                 </div>
                 <Link
                   href={`/policies/${p.slug}`}
-                  className="mt-2 block font-display text-base font-semibold leading-snug text-ink hover:text-brand-600"
+                  className="mt-2 block font-display text-base font-semibold leading-snug text-ink hover:text-brand-ink"
                 >
                   {p.name}
                 </Link>

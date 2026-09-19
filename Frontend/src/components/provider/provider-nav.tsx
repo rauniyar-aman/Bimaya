@@ -45,7 +45,7 @@ export function ProviderNav({ permissions }: { permissions: string[] }) {
             className={cn(
               "inline-flex shrink-0 items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors",
               active
-                ? "border-brand-500 text-brand-600"
+                ? "border-brand-500 text-brand-ink"
                 : "border-transparent text-muted hover:border-line hover:text-ink",
             )}
           >

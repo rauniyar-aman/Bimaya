@@ -62,13 +62,13 @@ export default async function PolicyDetailPage({ params }: { params: Params }) {
       <main className="flex-1">
         <Container className="py-8 lg:py-12">
           <nav className="text-sm text-muted" aria-label="Breadcrumb">
-            <Link href="/policies" className="hover:text-brand-600">
+            <Link href="/policies" className="hover:text-brand-ink">
               Policies
             </Link>
             <span className="mx-1.5">/</span>
             <Link
               href={`/categories/${policy.category.slug}`}
-              className="hover:text-brand-600"
+              className="hover:text-brand-ink"
             >
               {policy.category.name}
             </Link>
@@ -164,7 +164,7 @@ export default async function PolicyDetailPage({ params }: { params: Params }) {
                 <CardContent className="space-y-5">
                   <div>
                     <p className="text-xs text-muted">Premium</p>
-                    <p className="font-display text-3xl font-bold text-brand-600">
+                    <p className="font-display text-3xl font-bold text-brand-ink">
                       {formatNpr(policy.premium)}
                     </p>
                     <p className="text-sm text-muted">
@@ -218,7 +218,7 @@ export default async function PolicyDetailPage({ params }: { params: Params }) {
                       href={policy.provider.website}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block text-center text-sm font-medium text-brand-600 underline-offset-4 hover:underline"
+                      className="block text-center text-sm font-medium text-brand-ink underline-offset-4 hover:underline"
                     >
                       Visit {policy.provider.company_name}
                     </a>

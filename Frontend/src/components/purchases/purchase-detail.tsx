@@ -55,7 +55,7 @@ export function PurchaseDetail({ id }: { id: string }) {
       <nav aria-label="Breadcrumb" className="text-sm text-muted">
         <Link
           href="/dashboard/policies"
-          className="underline-offset-4 transition-colors hover:text-brand-600 hover:underline"
+          className="underline-offset-4 transition-colors hover:text-brand-ink hover:underline"
         >
           My policies
         </Link>

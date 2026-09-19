@@ -254,7 +254,7 @@ export function PurchaseForm({ policy }: { policy: Policy }) {
           <div className="flex items-center justify-between rounded-xl bg-surface p-4">
             <div>
               <p className="text-xs text-muted">Amount due</p>
-              <p className="font-display text-2xl font-bold text-brand-600">
+              <p className="font-display text-2xl font-bold text-brand-ink">
                 {formatNpr(policy.premium)}
               </p>
             </div>

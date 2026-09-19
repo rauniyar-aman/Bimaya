@@ -55,7 +55,7 @@ export function AddToCompare({
           "inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
           selected
             ? "border-brand-500 bg-brand-50 text-brand-700"
-            : "border-line text-ink/70 hover:border-brand-200 hover:text-brand-600",
+            : "border-line text-ink/70 hover:border-brand-200 hover:text-brand-ink",
         )}
         title={full ? `Compare up to ${MAX_COMPARE} plans` : undefined}
       >
@@ -79,7 +79,7 @@ export function AddToCompare({
       {count >= 2 && (
         <Link
           href={`/compare?ids=${getCompareIds().join(",")}`}
-          className="block text-center text-sm font-medium text-brand-600 underline-offset-4 hover:underline"
+          className="block text-center text-sm font-medium text-brand-ink underline-offset-4 hover:underline"
         >
           Compare {count} plans →
         </Link>

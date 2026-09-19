@@ -18,7 +18,7 @@ export default async function EditPolicyPage({ params }: { params: Params }) {
       <nav aria-label="Breadcrumb" className="text-sm text-muted">
         <Link
           href="/provider"
-          className="underline-offset-4 transition-colors hover:text-brand-600 hover:underline"
+          className="underline-offset-4 transition-colors hover:text-brand-ink hover:underline"
         >
           Provider area
         </Link>

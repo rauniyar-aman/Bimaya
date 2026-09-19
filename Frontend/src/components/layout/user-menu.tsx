@@ -94,7 +94,7 @@ export function UserMenu() {
               {displayName(user)}
             </p>
             <p className="truncate text-xs text-muted">{user.email}</p>
-            <p className="mt-1.5 text-xs font-medium text-brand-600">
+            <p className="mt-1.5 text-xs font-medium text-brand-ink">
               {ROLE_LABELS[user.role]}
             </p>
           </div>

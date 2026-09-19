@@ -53,7 +53,7 @@ export function Navbar() {
                   "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   active
                     ? "bg-brand-50 text-brand-600"
-                    : "text-ink/80 hover:bg-surface hover:text-brand-600",
+                    : "text-ink/80 hover:bg-surface hover:text-brand-ink",
                 )}
               >
                 {link.label}
@@ -140,7 +140,7 @@ export function Navbar() {
                     "rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                     active
                       ? "bg-brand-50 text-brand-600"
-                      : "text-ink/80 hover:bg-surface hover:text-brand-600",
+                      : "text-ink/80 hover:bg-surface hover:text-brand-ink",
                   )}
                 >
                   {link.label}
@@ -163,7 +163,7 @@ export function Navbar() {
                     key={link.href}
                     href={link.href}
                     onClick={() => setOpen(false)}
-                    className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-600"
+                    className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink/80 transition-colors hover:bg-surface hover:text-brand-ink"
                   >
                     {link.label}
                   </Link>

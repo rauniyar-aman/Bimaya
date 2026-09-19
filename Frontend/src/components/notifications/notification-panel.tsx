@@ -101,7 +101,7 @@ export function NotificationPanel({
             type="button"
             onClick={handleMarkAll}
             disabled={marking}
-            className="text-xs font-medium text-brand-600 transition-colors hover:text-brand-700 disabled:opacity-60"
+            className="text-xs font-medium text-brand-ink transition-colors hover:text-brand-700 disabled:opacity-60 dark:hover:text-brand-200"
           >
             {marking ? "Marking…" : "Mark all read"}
           </button>
@@ -143,7 +143,7 @@ export function NotificationPanel({
           href="/dashboard/notifications"
           onClick={onClose}
           role="menuitem"
-          className="block rounded-lg px-3 py-2 text-center text-sm font-medium text-brand-600 transition-colors hover:bg-surface"
+          className="block rounded-lg px-3 py-2 text-center text-sm font-medium text-brand-ink transition-colors hover:bg-surface"
         >
           View all notifications
         </Link>

@@ -61,7 +61,7 @@ export function ClaimDetail({ id }: { id: string }) {
       <nav aria-label="Breadcrumb" className="text-sm text-muted">
         <Link
           href="/dashboard/claims"
-          className="underline-offset-4 transition-colors hover:text-brand-600 hover:underline"
+          className="underline-offset-4 transition-colors hover:text-brand-ink hover:underline"
         >
           My claims
         </Link>

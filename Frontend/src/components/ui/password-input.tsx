@@ -33,7 +33,7 @@ export function PasswordInput({
         disabled={disabled}
         aria-label={visible ? "Hide password" : "Show password"}
         aria-pressed={visible}
-        className="absolute inset-y-0 right-0 flex items-center rounded-md px-3 text-muted transition-colors hover:text-ink focus:outline-none focus-visible:text-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+        className="absolute inset-y-0 right-0 flex items-center rounded-md px-3 text-muted transition-colors hover:text-ink focus:outline-none focus-visible:text-brand-ink disabled:cursor-not-allowed disabled:opacity-60"
       >
         {visible ? (
           <EyeOffIcon className="h-5 w-5" />

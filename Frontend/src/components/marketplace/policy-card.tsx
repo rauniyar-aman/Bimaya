@@ -51,7 +51,7 @@ export function PolicyCard({ policy }: { policy: PolicySummary }) {
       <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs text-muted">Premium</p>
-          <p className="font-display text-xl font-bold text-brand-600">
+          <p className="font-display text-xl font-bold text-brand-ink">
             {formatNpr(policy.premium)}
             <span className="text-xs font-medium text-muted">
               {frequencySuffix(policy.premium_frequency)}

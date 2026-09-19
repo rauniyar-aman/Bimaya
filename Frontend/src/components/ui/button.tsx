@@ -12,14 +12,15 @@ export type ButtonVariant =
 export type ButtonSize = "sm" | "md" | "lg";
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-60";
+  "inline-flex items-center justify-center gap-2 rounded-lg font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-60";
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary: "bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700",
   cta: "bg-accent-500 text-white hover:bg-accent-600 active:bg-accent-700",
   success: "bg-success-500 text-white hover:bg-success-600",
-  outline: "border border-brand-500 text-brand-600 hover:bg-brand-50",
-  ghost: "text-brand-600 hover:bg-brand-50",
+  outline:
+    "border border-brand-500 text-brand-ink hover:bg-brand-50 dark:hover:bg-brand-950",
+  ghost: "text-brand-ink hover:bg-brand-50 dark:hover:bg-brand-950",
   secondary: "border border-line bg-card text-ink hover:bg-surface",
 };
 

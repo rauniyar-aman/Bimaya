@@ -27,7 +27,7 @@ export default function OnboardPage() {
               are onboarded by our team after a quick review.{" "}
               <Link
                 href="/for-providers"
-                className="font-medium text-brand-600 underline-offset-4 hover:underline"
+                className="font-medium text-brand-ink underline-offset-4 hover:underline"
               >
                 Learn more
               </Link>

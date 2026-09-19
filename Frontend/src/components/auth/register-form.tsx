@@ -203,7 +203,7 @@ export function RegisterForm() {
         Are you an insurance company?{" "}
         <Link
           href="/for-providers"
-          className="font-medium text-brand-600 underline-offset-4 hover:underline"
+          className="font-medium text-brand-ink underline-offset-4 hover:underline"
         >
           Partner with Bimaya
         </Link>

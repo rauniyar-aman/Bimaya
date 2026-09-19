@@ -167,7 +167,7 @@ export function VerifyOtpForm() {
           type="button"
           onClick={handleResend}
           disabled={resending || cooldown > 0 || !email}
-          className="font-medium text-brand-600 underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
+          className="font-medium text-brand-ink underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
         >
           {cooldown > 0 ? `Resend in ${cooldown}s` : "Send a new one"}
         </button>

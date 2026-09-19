@@ -36,7 +36,7 @@ export function AuthFootnote({
       {prompt}{" "}
       <Link
         href={href}
-        className="font-medium text-brand-600 underline-offset-4 hover:underline"
+        className="font-medium text-brand-ink underline-offset-4 hover:underline"
       >
         {action}
       </Link>

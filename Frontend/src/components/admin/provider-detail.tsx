@@ -78,7 +78,7 @@ export function ProviderDetail({ id }: { id: string }) {
       <nav aria-label="Breadcrumb" className="text-sm text-muted">
         <Link
           href="/admin/providers"
-          className="underline-offset-4 transition-colors hover:text-brand-600 hover:underline"
+          className="underline-offset-4 transition-colors hover:text-brand-ink hover:underline"
         >
           Providers
         </Link>
@@ -217,7 +217,7 @@ function ProviderBody({
                   href={provider.website}
                   target="_blank"
                   rel="noreferrer noopener"
-                  className="text-brand-600 underline-offset-4 hover:underline"
+                  className="text-brand-ink underline-offset-4 hover:underline"
                 >
                   {provider.website}
                 </a>

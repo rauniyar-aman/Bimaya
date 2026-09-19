@@ -177,7 +177,7 @@ export default function ComparePage({
                 <div className="mt-6">
                   <Link
                     href="/policies"
-                    className="text-sm font-medium text-brand-600 underline-offset-4 hover:underline"
+                    className="text-sm font-medium text-brand-ink underline-offset-4 hover:underline"
                   >
                     + Add more plans
                   </Link>

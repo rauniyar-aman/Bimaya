@@ -212,7 +212,7 @@ export function ProviderApprovals() {
                     <TD>
                       <Link
                         href={`/admin/providers/${provider.id}`}
-                        className="font-medium text-ink underline-offset-4 transition-colors hover:text-brand-600 hover:underline"
+                        className="font-medium text-ink underline-offset-4 transition-colors hover:text-brand-ink hover:underline"
                       >
                         {provider.company_name}
                       </Link>

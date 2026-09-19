@@ -89,7 +89,7 @@ export default function ForProviders() {
 
               <h1 className="mt-5 font-display text-4xl font-bold leading-tight tracking-tight text-ink sm:text-5xl">
                 Sell insurance on Nepal&apos;s
-                <span className="text-brand-600"> digital marketplace.</span>
+                <span className="text-brand-ink"> digital marketplace.</span>
               </h1>
 
               <p className="mt-5 text-lg leading-relaxed text-muted">

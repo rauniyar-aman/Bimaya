@@ -68,7 +68,7 @@ export function Footer() {
                     <li key={link.href}>
                       <Link
                         href={link.href}
-                        className="text-sm text-muted transition-colors hover:text-brand-600"
+                        className="text-sm text-muted transition-colors hover:text-brand-ink"
                       >
                         {link.label}
                       </Link>
@@ -89,13 +89,13 @@ export function Footer() {
               <nav aria-label="Legal" className="flex items-center gap-5">
                 <Link
                   href="/privacy"
-                  className="text-xs text-muted transition-colors hover:text-brand-600"
+                  className="text-xs text-muted transition-colors hover:text-brand-ink"
                 >
                   Privacy
                 </Link>
                 <Link
                   href="/terms"
-                  className="text-xs text-muted transition-colors hover:text-brand-600"
+                  className="text-xs text-muted transition-colors hover:text-brand-ink"
                 >
                   Terms
                 </Link>
