@@ -51,11 +51,14 @@
   --color-success-800: #166138;
   --color-success-900: #124e2e;
 
-  /* Typography */
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+  /* Typography.
+     Mukta (text) — Devanagari-ready humanist, tuned for small sizes on cheap
+     screens. Fraunces (display) — soft optical-sized serif for headings and
+     money, so a rupee figure reads like a statement, not a metric. */
+  --font-sans: var(--font-mukta), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-display: var(--font-sora), var(--font-inter), ui-sans-serif, system-ui,
-    sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, "Times New Roman",
+    serif;
 }
 
 /*
@@ -76,6 +79,14 @@
   --card: #ffffff;
   --line: #e4eaf1;
 
+  /* Brand blue as foreground. `--color-brand-600` doubles as a fill — white
+     text sits on `bg-brand-600` — so it cannot flip with the theme without
+     turning those buttons inside out. Brand-coloured *text* on a themed
+     surface gets its own token that can flip: the mid blue reads 7.6:1 on
+     white, and dark mode swaps in a tint light enough to clear AA on the dark
+     background instead of sinking into it. */
+  --brand-ink: #1a5493;
+
   /* Destructive / error */
   --danger: #dc2626;
   --danger-foreground: #b42318;
@@ -94,6 +105,11 @@
   --card: #14243b;
   --line: #253850;
 
+  /* Brand-600 on these surfaces measures 2.05:1 — invisible. Brand-300 is the
+     lightest tint still recognisably the brand blue, and clears AA on all
+     three of `background`, `surface` and `card`. */
+  --brand-ink: #6fa3d7;
+
   /* Destructive / error — a lighter ink on a muted dark wash keeps contrast. */
   --danger: #f87171;
   --danger-foreground: #fca5a5;
@@ -109,6 +125,7 @@
   --color-surface: var(--surface);
   --color-card: var(--card);
   --color-line: var(--line);
+  --color-brand-ink: var(--brand-ink);
 
   --color-danger: var(--danger);
   --color-danger-foreground: var(--danger-foreground);
@@ -118,6 +135,13 @@
 
 @layer base {
   html {
+    /* Mukta's x-height is about 0.47em where a typical UI sans sits nearer
+       0.52em, so 16px copy reads a size smaller than it measures. Scale the
+       root instead of patching sizes page by page — as a percentage, so a
+       reader's own browser setting still multiplies through — and every
+       rem-based size and space grows with it, holding the proportions as
+       drawn while the text reads at its intended size. */
+    font-size: 106.25%;
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
   }
@@ -133,5 +157,22 @@
   ::selection {
     background-color: var(--color-brand-500);
     color: #ffffff;
+  }
+
+  /* `scroll-behavior: smooth` above is unconditional, and cards/links animate on
+     hover throughout. Honour a reduced-motion preference for all of it. */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

@@ -1,20 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Sora } from "next/font/google";
+import { Fraunces, Mukta } from "next/font/google";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { ChatWidget } from "@/components/assistant/chat-widget";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import "./globals.css";
 
-const inter = Inter({
+// Text face. Mukta ships Devanagari and Latin in one family, so the Nepali
+// translation adds "devanagari" to `subsets` here rather than a second font —
+// until then we only pay for the Latin glyphs we actually render.
+const mukta = Mukta({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-mukta",
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
-const sora = Sora({
+// Display face, for headings and money. The `opsz` axis lets one family cover a
+// 12px label and a 56px rupee figure, optically sized by the browser at each.
+const fraunces = Fraunces({
   subsets: ["latin"],
-  variable: "--font-sora",
-  weight: ["500", "600", "700", "800"],
+  variable: "--font-fraunces",
+  axes: ["opsz"],
   display: "swap",
 });
 
@@ -65,7 +71,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${sora.variable} h-full antialiased`}
+      className={`${mukta.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
